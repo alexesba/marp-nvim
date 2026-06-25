@@ -8,6 +8,8 @@ local defaults = {
   auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
+  close_browser_on_stop = false, -- experimental: wrap preview to close browser tab on :MarpStop
+  wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
 }
 
 M.options = {}

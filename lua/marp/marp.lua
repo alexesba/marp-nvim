@@ -1,6 +1,7 @@
 local cli = require("marp.cli")
 local config = require("marp/config")
 local util = require("marp/util")
+local wrapper = require("marp.wrapper")
 
 local M = {}
 M.jobid = 0
@@ -8,6 +9,10 @@ M._intentional_stop = false
 
 local function on_job_exit(_, exit_code, _)
   M.jobid = 0
+
+  if config.options.close_browser_on_stop then
+    wrapper.stop()
+  end
 
   if M._intentional_stop then
     M._intentional_stop = false
@@ -86,7 +91,18 @@ function M.start()
     return
   end
 
-  util.open_url_in_browser("http://localhost:" .. port)
+  local preview_url = "http://localhost:" .. port
+
+  if config.options.close_browser_on_stop then
+    local ok, err = wrapper.start(port)
+    if ok then
+      preview_url = wrapper.preview_url() or preview_url
+    elseif err then
+      util.log_warn(err .. "; opening Marp directly")
+    end
+  end
+
+  util.open_url_in_browser(preview_url)
 end
 
 --[[
@@ -104,6 +120,11 @@ function M.stop()
   end
 
   M._intentional_stop = true
+
+  if config.options.close_browser_on_stop then
+    wrapper.stop()
+  end
+
   vim.fn.jobstop(M.jobid)
   M.jobid = 0
   util.log_info("server stopped")

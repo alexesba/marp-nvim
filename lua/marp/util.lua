@@ -10,22 +10,20 @@ local M = {}
     ```
 ]]
 function M.open_url_in_browser(url)
-  -- Construct the shell command to open the URL in a browser based on the OS
-  local open_cmd = nil
-  if vim.fn.has("mac") == 1 then
-    open_cmd = "open"
-  elseif vim.fn.has("unix") == 1 then
-    open_cmd = "xdg-open"
-  elseif vim.fn.has("win32") == 1 then
-    open_cmd = "start"
-  else
-    error("Unsupported operating system")
+  if vim.ui and vim.ui.open then
+    vim.ui.open(url)
     return
   end
 
-  -- Execute the shell command to open the URL in a browser
-  local cmd = string.format("%s %s", open_cmd, url)
-  vim.api.nvim_command("! " .. cmd)
+  if vim.fn.has("mac") == 1 then
+    vim.fn.jobstart({ "open", url }, { detach = true })
+  elseif vim.fn.has("unix") == 1 then
+    vim.fn.jobstart({ "xdg-open", url }, { detach = true })
+  elseif vim.fn.has("win32") == 1 then
+    vim.fn.jobstart({ "cmd", "/c", "start", "", url }, { detach = true })
+  else
+    M.log_error("unsupported operating system")
+  end
 end
 
 --[[
@@ -58,26 +56,30 @@ end
     ```
 ]]
 function M.wait_for_response(url, max_attempts, delay_between_attempts)
-  local attempts = 0
-  local server_responded = false
+  local null_device = vim.fn.has("win32") == 1 and "NUL" or "/dev/null"
 
-  while attempts < max_attempts and not server_responded do
-    local success = false
-    local response = vim.fn.systemlist('curl -s -o /dev/null -w "%{http_code}" ' .. url)
+  for attempt = 1, max_attempts do
+    local result = vim.system({
+      "curl",
+      "-s",
+      "-o",
+      null_device,
+      "-w",
+      "%{http_code}",
+      url,
+    }, { text = true }):wait()
 
-    if response[1] == "200" then
-      success = true
+    if result.stdout == "200" then
+      return true
     end
 
-    if success then
-      print("Server responded successfully!")
-      server_responded = true
-    else
-      attempts = attempts + 1
-      print("Attempt", attempts, "- Server not yet responding. Retrying in", delay_between_attempts, "second(s)...")
-      M.wait(1)
+    if attempt < max_attempts then
+      M.wait(delay_between_attempts)
     end
   end
+
+  M.log_warn("server did not respond in time")
+  return false
 end
 
 --[[]

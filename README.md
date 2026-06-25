@@ -21,19 +21,23 @@ Packer:
 ```lua
   use({
     "mpas/marp-nvim",
+    ft = "markdown",
     run = function()
       require("marp").install()
     end,
   }),
 ```
 
-Lazy (recommended — installs Marp CLI on plugin install/update):
+Lazy (recommended — loads on Markdown buffers, installs Marp CLI on plugin install/update):
 ```lua
   {
     "mpas/marp-nvim",
+    ft = "markdown",
+    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
       require("marp").install(plugin.dir)
     end,
+    config = true,
   },
 ```
 
@@ -41,6 +45,8 @@ With a specific configuration:
 ```lua
   {
     "mpas/marp-nvim",
+    ft = "markdown",
+    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
       require("marp").install(plugin.dir)
     end,
@@ -54,7 +60,9 @@ With a specific configuration:
   },
 ```
 
-You can also install the bundled Marp CLI manually at any time with `:MarpInstall`.
+The plugin also registers a `FileType` autocmd for `markdown`, so it loads when you open a Markdown file even without lazy-loading configuration. With lazy.nvim, `ft = "markdown"` is still recommended so the plugin is not loaded at startup.
+
+If Marp CLI is not found on your `PATH` and is not yet installed in the plugin, `:MarpInstall` is registered automatically so you can install it manually.
 
 ## ⚙️ Configuration
 
@@ -95,7 +103,7 @@ The following commands are available:
 - `:MarpStop` - stop the Marp server
 - `:MarpToggle` - toggle the Marp server (start/stop)
 - `:MarpStatus` - see if Marp server is running
-- `:MarpInstall` - install the bundled Marp CLI into the plugin
+- `:MarpInstall` - install the bundled Marp CLI (only registered when Marp is not already available)
 
 ## 🎨 Theming
 Marp CLI can recognize custom themes that are in the `themes/` directory in your project's root directory. For example, if you open neovim in the `presentations` directory, created a directory inside of `presentations` called `themes` and place the theme CSS files inside of this directory. They should be automatically loaded by Marp and applied to presentations with the theme specified.

@@ -4,6 +4,29 @@ local util = require("marp.util")
 
 local M = {}
 
+--- Whether a Marp executable is available without npx or auto-install.
+function M.has_executable()
+  local opts = config.options
+
+  if opts.marp_command and opts.marp_command ~= "" then
+    return true
+  end
+
+  if vim.fn.executable("marp") == 1 then
+    return true
+  end
+
+  if install.bundled_path() then
+    return true
+  end
+
+  return false
+end
+
+function M.needs_install()
+  return not M.has_executable()
+end
+
 local function npx_argv(version)
   return { "npx", "@marp-team/marp-cli@" .. version }
 end

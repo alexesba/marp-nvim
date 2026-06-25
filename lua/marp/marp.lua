@@ -4,6 +4,20 @@ local util = require("marp/util")
 
 local M = {}
 M.jobid = 0
+M._intentional_stop = false
+
+local function on_job_exit(_, exit_code, _)
+  M.jobid = 0
+
+  if M._intentional_stop then
+    M._intentional_stop = false
+    return
+  end
+
+  if exit_code ~= 0 then
+    util.log_warn("server exited unexpectedly (code=" .. exit_code .. ")")
+  end
+end
 
 local function marp_running()
   return M.jobid ~= 0
@@ -58,10 +72,9 @@ function M.start()
 
   M.jobid = vim.fn.jobstart(argv, {
     env = env,
-    on_exit = function(_, exit_code, _)
-      M.jobid = 0
-      util.log_info("exit (code=" .. exit_code .. ")")
-    end,
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_exit = on_job_exit,
   })
 
   if M.jobid <= 0 then
@@ -69,7 +82,10 @@ function M.start()
     return
   end
 
-  util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay)
+  if not util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay) then
+    return
+  end
+
   util.open_url_in_browser("http://localhost:" .. port)
 end
 
@@ -82,6 +98,12 @@ end
     ```
 ]]
 function M.stop()
+  if M.jobid == 0 then
+    util.log_info("not running")
+    return
+  end
+
+  M._intentional_stop = true
   vim.fn.jobstop(M.jobid)
   M.jobid = 0
   util.log_info("server stopped")

@@ -7,6 +7,35 @@ local M = {}
 M.jobid = 0
 M._intentional_stop = false
 
+local exit_cleanup_registered = false
+
+local function ensure_exit_cleanup()
+  if exit_cleanup_registered then
+    return
+  end
+  exit_cleanup_registered = true
+
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("MarpExit", { clear = true }),
+    callback = function()
+      M.shutdown()
+    end,
+  })
+end
+
+local function stop_jobs()
+  M._intentional_stop = true
+
+  if config.options.close_browser_on_stop then
+    wrapper.stop()
+  end
+
+  if M.jobid > 0 then
+    pcall(vim.fn.jobstop, M.jobid)
+    M.jobid = 0
+  end
+end
+
 local function on_job_exit(_, exit_code, _)
   M.jobid = 0
 
@@ -87,7 +116,10 @@ function M.start()
     return
   end
 
+  ensure_exit_cleanup()
+
   if not util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay) then
+    stop_jobs()
     return
   end
 
@@ -119,15 +151,19 @@ function M.stop()
     return
   end
 
-  M._intentional_stop = true
+  stop_jobs()
+  util.log_info("server stopped")
+end
 
-  if config.options.close_browser_on_stop then
-    wrapper.stop()
+--[[
+    Stops Marp silently when Neovim exits.
+]]
+function M.shutdown()
+  if M.jobid == 0 and not wrapper.running() then
+    return
   end
 
-  vim.fn.jobstop(M.jobid)
-  M.jobid = 0
-  util.log_info("server stopped")
+  stop_jobs()
 end
 
 --[[

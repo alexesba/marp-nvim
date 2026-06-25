@@ -1,5 +1,6 @@
-local util = require("marp/util")
+local cli = require("marp.cli")
 local config = require("marp/config")
+local util = require("marp/util")
 
 local M = {}
 M.jobid = 0
@@ -47,16 +48,26 @@ function M.start()
   local wait_for_response_timeout = config.options.wait_for_response_timeout
   local wait_for_response_delay = config.options.wait_for_response_delay
 
-  local marp_start_command = "PORT=" .. port .. " marp --server " .. vim.fn.getcwd()
+  local argv, env, err = cli.server_argv(port, vim.fn.getcwd())
+  if not argv then
+    util.log_error(err or "could not resolve Marp CLI")
+    return
+  end
 
   util.log_info("starting server on http://localhost:" .. port)
 
-  M.jobid = vim.fn.jobstart(marp_start_command, {
+  M.jobid = vim.fn.jobstart(argv, {
+    env = env,
     on_exit = function(_, exit_code, _)
       M.jobid = 0
       util.log_info("exit (code=" .. exit_code .. ")")
     end,
   })
+
+  if M.jobid <= 0 then
+    util.log_error("failed to start Marp server")
+    return
+  end
 
   util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay)
   util.open_url_in_browser("http://localhost:" .. port)

@@ -6,10 +6,13 @@ A [neovim](https://neovim.io/) plugin for [Marp](https://marp.app/).
 - toggle the Marp server (start/stop)
 - see if Marp server is running
 - browser window opens when Marp is running and ready
+- automatically installs Marp CLI into the plugin when needed
 
 ## ⚡️ Requirements
 
-- [Marp](https://marp.app/) CLI installed and available in your path
+- [Node.js](https://nodejs.org/) v18+ and `npm` (for automatic Marp CLI installation)
+- Alternatively, install [Marp CLI](https://marp.app/) globally and the plugin will use it from your `PATH`
+
 ## 📦 Installation
 
 Install the plugin with your preferred package manager:
@@ -18,13 +21,19 @@ Packer:
 ```lua
   use({
     "mpas/marp-nvim",
+    run = function()
+      require("marp").install()
+    end,
   }),
 ```
 
-Lazy:
+Lazy (recommended — installs Marp CLI on plugin install/update):
 ```lua
   {
     "mpas/marp-nvim",
+    build = function(plugin)
+      require("marp").install(plugin.dir)
+    end,
   },
 ```
 
@@ -32,6 +41,9 @@ With a specific configuration:
 ```lua
   {
     "mpas/marp-nvim",
+    build = function(plugin)
+      require("marp").install(plugin.dir)
+    end,
     config = function()
       require("marp").setup({
         port = 8080,
@@ -42,6 +54,7 @@ With a specific configuration:
   },
 ```
 
+You can also install the bundled Marp CLI manually at any time with `:MarpInstall`.
 
 ## ⚙️ Configuration
 
@@ -52,8 +65,19 @@ The following defaults are provided:
   port = 8080, -- the port on which the Marp server should listen
   wait_for_response_timeout = 30, -- how long to wait for a response from the server before giving up
   wait_for_response_delay = 1, -- how long to wait between attempts to connect to the server
+  marp_command = nil, -- override Marp executable; nil auto-resolves PATH, bundled, then npx
+  auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
+  use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
+  marp_version = "latest", -- npx package version when falling back to npx
 }
 ```
+
+Marp CLI resolution order when `marp_command` is not set:
+
+1. `marp` on your `PATH`
+2. Bundled install in the plugin's `deps/` directory
+3. Auto-install into `deps/` if `auto_install` is true
+4. `npx @marp-team/marp-cli@<marp_version>` if `use_npx_fallback` is true
 
 In the above example, the Marp server will be started on port 8080, and the plugin will wait for up to 30 seconds for a response from the server before giving up. It will try to connect to the server every second.
 
@@ -71,6 +95,7 @@ The following commands are available:
 - `:MarpStop` - stop the Marp server
 - `:MarpToggle` - toggle the Marp server (start/stop)
 - `:MarpStatus` - see if Marp server is running
+- `:MarpInstall` - install the bundled Marp CLI into the plugin
 
 ## 🎨 Theming
 Marp CLI can recognize custom themes that are in the `themes/` directory in your project's root directory. For example, if you open neovim in the `presentations` directory, created a directory inside of `presentations` called `themes` and place the theme CSS files inside of this directory. They should be automatically loaded by Marp and applied to presentations with the theme specified.

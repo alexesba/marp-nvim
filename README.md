@@ -7,10 +7,11 @@ A [neovim](https://neovim.io/) plugin for [Marp](https://marp.app/).
 - see if Marp server is running
 - browser window opens when Marp is running and ready
 - automatically installs Marp CLI into the plugin when needed
+- optionally close the browser preview tab when stopping the server
 
 ## ⚡️ Requirements
 
-- [Node.js](https://nodejs.org/) v18+ and `npm` (for automatic Marp CLI installation)
+- [Node.js](https://nodejs.org/) v18+ and `npm` (for automatic Marp CLI installation and the preview wrapper)
 - Alternatively, install [Marp CLI](https://marp.app/) globally and the plugin will use it from your `PATH`
 
 ## 📦 Installation
@@ -20,7 +21,7 @@ Install the plugin with your preferred package manager:
 Packer:
 ```lua
   use({
-    "mpas/marp-nvim",
+    "alexesba/marp-nvim",
     ft = "markdown",
     run = function()
       require("marp").install()
@@ -31,7 +32,7 @@ Packer:
 Lazy (recommended — loads on Markdown buffers, installs Marp CLI on plugin install/update):
 ```lua
   {
-    "mpas/marp-nvim",
+    "alexesba/marp-nvim",
     ft = "markdown",
     cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
@@ -44,7 +45,7 @@ Lazy (recommended — loads on Markdown buffers, installs Marp CLI on plugin ins
 With a specific configuration:
 ```lua
   {
-    "mpas/marp-nvim",
+    "alexesba/marp-nvim",
     ft = "markdown",
     cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
@@ -55,6 +56,7 @@ With a specific configuration:
         port = 8080,
         wait_for_response_timeout = 30,
         wait_for_response_delay = 1,
+        close_browser_on_stop = true,
       })
     end,
   },
@@ -77,14 +79,21 @@ The following defaults are provided:
   auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
-  close_browser_on_stop = false, -- experimental: close preview tab on :MarpStop
+  close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
 }
 ```
 
-### Experimental: close browser tab on stop
+Marp CLI resolution order when `marp_command` is not set:
 
-On branch `feature/browser-close-wrapper`, you can enable a small preview wrapper that opens Marp inside a controlled page and listens for a close signal when you run `:MarpStop` (similar in spirit to `markdown-preview.nvim`).
+1. `marp` on your `PATH`
+2. Bundled install in the plugin's `deps/` directory
+3. Auto-install into `deps/` if `auto_install` is true
+4. `npx @marp-team/marp-cli@<marp_version>` if `use_npx_fallback` is true
+
+### Close browser tab on stop
+
+Set `close_browser_on_stop = true` to close the preview tab when you run `:MarpStop`.
 
 ```lua
 require("marp").setup({
@@ -95,20 +104,11 @@ require("marp").setup({
 How it works:
 
 1. Marp still runs on `port` (default `8080`)
-2. A tiny Node wrapper serves `http://127.0.0.1:<port+1>/` with an iframe to Marp
+2. A small Node wrapper serves `http://127.0.0.1:<port+1>/` with an iframe to Marp
 3. The wrapper page uses Server-Sent Events (SSE) to receive a `close` event
 4. `:MarpStop` POSTs to `/close`, which tells the page to call `window.close()`
 
-**Caveats:** `window.close()` is not guaranteed in every browser — some only allow it for script-opened windows. If the tab stays open, it will show a connection error after the server stops. Requires Node.js (already needed for bundled Marp CLI install).
-
-Marp CLI resolution order when `marp_command` is not set:
-
-1. `marp` on your `PATH`
-2. Bundled install in the plugin's `deps/` directory
-3. Auto-install into `deps/` if `auto_install` is true
-4. `npx @marp-team/marp-cli@<marp_version>` if `use_npx_fallback` is true
-
-In the above example, the Marp server will be started on port 8080, and the plugin will wait for up to 30 seconds for a response from the server before giving up. It will try to connect to the server every second.
+**Note:** `window.close()` is not guaranteed in every browser. If the tab stays open, it will show a connection error after the server stops.
 
 ## ⌨️ Keybindings
 This plugin does not set any keybindings by default. You can set them yourself like this:
@@ -131,4 +131,4 @@ Marp CLI can recognize custom themes that are in the `themes/` directory in your
 
 ## 💡Inspiration
 
-This plugin is inspired by [aca/marp.nvim](https://github.com/aca/marp.nvim)!
+This plugin is inspired by [aca/marp.nvim](https://github.com/aca/marp.nvim) and [mpas/marp-nvim](https://github.com/mpas/marp-nvim)!

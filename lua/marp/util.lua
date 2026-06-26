@@ -118,8 +118,15 @@ end
 
 --- Path relative to cwd for display (e.g. `/slides` instead of the full absolute path).
 function M.display_server_dir(server_dir)
-  local abs_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p")
-  local abs_dir = vim.fn.fnamemodify(server_dir, ":p")
+  local function strip_slash(path)
+    if path:sub(-1) == "/" then
+      return path:sub(1, -2)
+    end
+    return path
+  end
+
+  local abs_cwd = strip_slash(vim.fn.fnamemodify(vim.fn.getcwd(), ":p"))
+  local abs_dir = strip_slash(vim.fn.fnamemodify(server_dir, ":p"))
 
   if abs_dir == abs_cwd then
     return "/."
@@ -128,7 +135,10 @@ function M.display_server_dir(server_dir)
   if vim.fs and vim.fs.relpath then
     local rel, err = vim.fs.relpath(abs_dir, abs_cwd)
     if rel and not err and not rel:match("^%.%.") then
-      return "/" .. rel
+      rel = strip_slash(rel)
+      if rel ~= "" then
+        return "/" .. rel
+      end
     end
   end
 

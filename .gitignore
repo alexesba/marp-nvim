@@ -43,3 +43,6 @@ luac.out
 deps/node_modules/
 deps/package-lock.json
 
+# Test dependencies
+.deps/
+

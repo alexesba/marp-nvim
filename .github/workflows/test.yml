@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: neovim/setup-neovim@v2
+        with:
+          version: stable
+
+      - name: Cache plenary.nvim
+        uses: actions/cache@v4
+        with:
+          path: .deps/plenary.nvim
+          key: plenary-${{ runner.os }}-${{ hashFiles('scripts/minimal_init.lua') }}
+          restore-keys: |
+            plenary-${{ runner.os }}-
+
+      - name: Run specs
+        run: make test

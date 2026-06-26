@@ -77,23 +77,6 @@ With lazy.nvim `opts` (no separate `config` function needed):
   },
 ```
 
-Local development with lazy.nvim:
-
-```lua
-  {
-    dir = "/path/to/marp-nvim",
-    name = "marp-nvim",
-    ft = "markdown",
-    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
-    opts = {
-      close_browser_on_stop = true,
-    },
-    build = function(plugin)
-      require("marp").install(plugin.dir)
-    end,
-  },
-```
-
 The plugin also registers a `FileType` autocmd for `markdown`, so it loads when you open a Markdown file even without lazy-loading configuration. With lazy.nvim, `ft = "markdown"` is still recommended so the plugin is not loaded at startup.
 
 If Marp CLI is not found on your `PATH` and is not yet installed in the plugin, `:MarpInstall` is registered automatically so you can install it manually.

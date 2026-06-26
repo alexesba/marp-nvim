@@ -1,6 +1,7 @@
 local cli = require("marp.cli")
 local config = require("marp/config")
 local install = require("marp.install")
+local lazy = require("marp.lazy")
 local marp = require("marp/marp")
 
 local M = {}
@@ -38,9 +39,11 @@ end
 
 function M.setup(options)
   config.setup(options)
+  vim.g.marp_lazy_opts_applied = true
   register_commands()
 end
 
+lazy.apply()
 register_commands()
 
 return M

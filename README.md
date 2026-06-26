@@ -7,7 +7,7 @@ A [neovim](https://neovim.io/) plugin for [Marp](https://marp.app/).
 - see if Marp server is running
 - browser window opens when Marp is running and ready
 - automatically installs Marp CLI into the plugin when needed
-- optionally close the browser preview tab when stopping the server
+- optionally close the browser preview tab when stopping the server (`close_browser_on_stop`)
 
 ## ⚡️ Requirements
 
@@ -56,8 +56,23 @@ With a specific configuration:
         port = 8080,
         wait_for_response_timeout = 30,
         wait_for_response_delay = 1,
-        close_browser_on_stop = true,
       })
+    end,
+  },
+```
+
+With lazy.nvim `opts` (no separate `config` function needed):
+
+```lua
+  {
+    "alexesba/marp-nvim",
+    ft = "markdown",
+    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    opts = {
+      close_browser_on_stop = true,
+    },
+    build = function(plugin)
+      require("marp").install(plugin.dir)
     end,
   },
 ```
@@ -81,6 +96,8 @@ The following defaults are provided:
   marp_version = "latest", -- npx package version when falling back to npx
   close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
+  use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
 }
 ```
 
@@ -91,9 +108,22 @@ Marp CLI resolution order when `marp_command` is not set:
 3. Auto-install into `deps/` if `auto_install` is true
 4. `npx @marp-team/marp-cli@<marp_version>` if `use_npx_fallback` is true
 
+### Server directory in large projects
+
+By default, `:MarpStart` runs `marp --server` on the **current Markdown buffer's directory**, not Neovim's working directory. This avoids serving an entire repository (for example a Rails app root with `node_modules/`, `tmp/`, and thousands of files).
+
+Override when needed:
+
+```lua
+require("marp").setup({
+  server_dir = "/path/to/slides", -- always serve this directory
+  use_buffer_dir = false,         -- use vim.fn.getcwd() instead of the buffer path
+})
+```
+
 ### Close browser tab on stop
 
-Set `close_browser_on_stop = true` to close the preview tab when you run `:MarpStop`.
+Disabled by default. Set `close_browser_on_stop = true` to open Marp through a small wrapper page so `:MarpStop` can signal the browser to close the tab.
 
 ```lua
 require("marp").setup({

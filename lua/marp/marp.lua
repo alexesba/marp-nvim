@@ -1,11 +1,41 @@
 local cli = require("marp.cli")
 local config = require("marp/config")
+local lazy = require("marp.lazy")
 local util = require("marp/util")
 local wrapper = require("marp.wrapper")
 
 local M = {}
 M.jobid = 0
 M._intentional_stop = false
+
+local exit_cleanup_registered = false
+
+local function ensure_exit_cleanup()
+  if exit_cleanup_registered then
+    return
+  end
+  exit_cleanup_registered = true
+
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("MarpExit", { clear = true }),
+    callback = function()
+      M.shutdown()
+    end,
+  })
+end
+
+local function stop_jobs()
+  M._intentional_stop = true
+
+  if config.options.close_browser_on_stop then
+    wrapper.stop()
+  end
+
+  if M.jobid > 0 then
+    pcall(vim.fn.jobstop, M.jobid)
+    M.jobid = 0
+  end
+end
 
 local function on_job_exit(_, exit_code, _)
   M.jobid = 0
@@ -53,7 +83,11 @@ end
     ```
 ]]
 function M.start()
-  if not util.dir_contains_md_files(vim.fn.getcwd()) then
+  lazy.apply()
+
+  local server_dir = util.resolve_server_dir()
+
+  if not util.can_start_server() then
     util.log_info("no Markdown files found, exiting!")
     return
   end
@@ -67,13 +101,15 @@ function M.start()
   local wait_for_response_timeout = config.options.wait_for_response_timeout
   local wait_for_response_delay = config.options.wait_for_response_delay
 
-  local argv, env, err = cli.server_argv(port, vim.fn.getcwd())
+  local argv, env, err = cli.server_argv(port, server_dir)
   if not argv then
     util.log_error(err or "could not resolve Marp CLI")
     return
   end
 
-  util.log_info("starting server on http://localhost:" .. port)
+  util.log_info(
+    "starting server on http://localhost:" .. port .. " (" .. util.display_server_dir(server_dir) .. ")"
+  )
 
   M.jobid = vim.fn.jobstart(argv, {
     env = env,
@@ -87,7 +123,10 @@ function M.start()
     return
   end
 
+  ensure_exit_cleanup()
+
   if not util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay) then
+    stop_jobs()
     return
   end
 
@@ -119,15 +158,19 @@ function M.stop()
     return
   end
 
-  M._intentional_stop = true
+  stop_jobs()
+  util.log_info("server stopped")
+end
 
-  if config.options.close_browser_on_stop then
-    wrapper.stop()
+--[[
+    Stops Marp silently when Neovim exits.
+]]
+function M.shutdown()
+  if M.jobid == 0 and not wrapper.running() then
+    return
   end
 
-  vim.fn.jobstop(M.jobid)
-  M.jobid = 0
-  util.log_info("server stopped")
+  stop_jobs()
 end
 
 --[[

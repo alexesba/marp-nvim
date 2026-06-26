@@ -78,29 +78,30 @@ function M.start(marp_port)
   return true
 end
 
-function M.close_browser()
+function M.stop()
   if not M.wrapper_port then
     return
   end
+
+  local wrapper_port = M.wrapper_port
+  local wrapper_jobid = M.jobid
 
   vim.system({
     "curl",
     "-s",
     "-X",
     "POST",
-    "http://127.0.0.1:" .. M.wrapper_port .. "/close",
+    "http://127.0.0.1:" .. wrapper_port .. "/close",
   }, { text = true }):wait()
-end
-
-function M.stop()
-  M.close_browser()
-
-  if M.jobid > 0 then
-    vim.fn.jobstop(M.jobid)
-    M.jobid = 0
-  end
 
   M.wrapper_port = nil
+  M.jobid = 0
+
+  if wrapper_jobid > 0 then
+    vim.defer_fn(function()
+      pcall(vim.fn.jobstop, wrapper_jobid)
+    end, 200)
+  end
 end
 
 return M

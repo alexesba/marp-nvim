@@ -8,8 +8,10 @@ local defaults = {
   auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
-  close_browser_on_stop = false, -- experimental: wrap preview to close browser tab on :MarpStop
+  close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
+  use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
 }
 
 M.options = {}

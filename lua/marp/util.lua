@@ -83,6 +83,66 @@ function M.wait_for_response(url, max_attempts, delay_between_attempts)
 end
 
 --[[]
+    Resolves the directory to pass to `marp --server`.
+    Prefers the current Markdown buffer's directory over cwd so large projects
+    (e.g. Rails repos) are not served from the repository root.
+]]
+function M.resolve_server_dir()
+  local opts = require("marp.config").options
+
+  if opts.server_dir then
+    return vim.fn.fnamemodify(opts.server_dir, ":p")
+  end
+
+  if opts.use_buffer_dir then
+    local bufname = vim.api.nvim_buf_get_name(0)
+    if bufname ~= "" and vim.bo.filetype == "markdown" then
+      local dir = vim.fn.fnamemodify(bufname, ":p:h")
+      if vim.fn.isdirectory(dir) == 1 then
+        return dir
+      end
+    end
+  end
+
+  return vim.fn.getcwd()
+end
+
+function M.can_start_server()
+  local bufname = vim.api.nvim_buf_get_name(0)
+  if bufname ~= "" and vim.bo.filetype == "markdown" and vim.fn.filereadable(bufname) == 1 then
+    return true
+  end
+
+  return M.dir_contains_md_files(M.resolve_server_dir())
+end
+
+--- Path relative to cwd for display (e.g. `/slides` instead of the full absolute path).
+function M.display_server_dir(server_dir)
+  local abs_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p")
+  local abs_dir = vim.fn.fnamemodify(server_dir, ":p")
+
+  if abs_dir == abs_cwd then
+    return "/."
+  end
+
+  if vim.fs and vim.fs.relpath then
+    local rel, err = vim.fs.relpath(abs_dir, abs_cwd)
+    if rel and not err and not rel:match("^%.%.") then
+      return "/" .. rel
+    end
+  end
+
+  if abs_dir:sub(1, #abs_cwd) == abs_cwd then
+    local suffix = abs_dir:sub(#abs_cwd + 1):gsub("^/", "")
+    if suffix ~= "" then
+      return "/" .. suffix
+    end
+  end
+
+  return "/" .. vim.fn.fnamemodify(abs_dir, ":t")
+end
+
+--[[]
     Determines whether a directory contains Markdown files.
     @param current_dir (string) The directory to check.
     @return (boolean) Whether the directory contains Markdown files.

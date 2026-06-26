@@ -7,7 +7,7 @@ A [neovim](https://neovim.io/) plugin for [Marp](https://marp.app/).
 - see if Marp server is running
 - browser window opens when Marp is running and ready
 - automatically installs Marp CLI into the plugin when needed
-- optionally close the browser preview tab when stopping the server
+- optionally close the browser preview tab when stopping the server (`close_browser_on_stop`)
 
 ## ⚡️ Requirements
 
@@ -56,8 +56,40 @@ With a specific configuration:
         port = 8080,
         wait_for_response_timeout = 30,
         wait_for_response_delay = 1,
-        close_browser_on_stop = true,
       })
+    end,
+  },
+```
+
+With lazy.nvim `opts` (no separate `config` function needed):
+
+```lua
+  {
+    "alexesba/marp-nvim",
+    ft = "markdown",
+    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    opts = {
+      close_browser_on_stop = true,
+    },
+    build = function(plugin)
+      require("marp").install(plugin.dir)
+    end,
+  },
+```
+
+Local development with lazy.nvim:
+
+```lua
+  {
+    dir = "/path/to/marp-nvim",
+    name = "marp-nvim",
+    ft = "markdown",
+    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    opts = {
+      close_browser_on_stop = true,
+    },
+    build = function(plugin)
+      require("marp").install(plugin.dir)
     end,
   },
 ```
@@ -93,7 +125,7 @@ Marp CLI resolution order when `marp_command` is not set:
 
 ### Close browser tab on stop
 
-Set `close_browser_on_stop = true` to close the preview tab when you run `:MarpStop`.
+Disabled by default. Set `close_browser_on_stop = true` to open Marp through a small wrapper page so `:MarpStop` can signal the browser to close the tab.
 
 ```lua
 require("marp").setup({

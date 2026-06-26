@@ -1,5 +1,6 @@
 local cli = require("marp.cli")
 local config = require("marp/config")
+local lazy = require("marp.lazy")
 local util = require("marp/util")
 local wrapper = require("marp.wrapper")
 
@@ -82,6 +83,7 @@ end
     ```
 ]]
 function M.start()
+  lazy.apply()
   if not util.dir_contains_md_files(vim.fn.getcwd()) then
     util.log_info("no Markdown files found, exiting!")
     return

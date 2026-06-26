@@ -84,7 +84,10 @@ end
 ]]
 function M.start()
   lazy.apply()
-  if not util.dir_contains_md_files(vim.fn.getcwd()) then
+
+  local server_dir = util.resolve_server_dir()
+
+  if not util.can_start_server() then
     util.log_info("no Markdown files found, exiting!")
     return
   end
@@ -98,13 +101,15 @@ function M.start()
   local wait_for_response_timeout = config.options.wait_for_response_timeout
   local wait_for_response_delay = config.options.wait_for_response_delay
 
-  local argv, env, err = cli.server_argv(port, vim.fn.getcwd())
+  local argv, env, err = cli.server_argv(port, server_dir)
   if not argv then
     util.log_error(err or "could not resolve Marp CLI")
     return
   end
 
-  util.log_info("starting server on http://localhost:" .. port)
+  util.log_info(
+    "starting server on http://localhost:" .. port .. " (" .. util.display_server_dir(server_dir) .. ")"
+  )
 
   M.jobid = vim.fn.jobstart(argv, {
     env = env,

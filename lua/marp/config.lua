@@ -10,6 +10,8 @@ local defaults = {
   marp_version = "latest", -- npx package version when falling back to npx
   close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
+  use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
 }
 
 M.options = {}

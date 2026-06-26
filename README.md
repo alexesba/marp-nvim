@@ -113,6 +113,8 @@ The following defaults are provided:
   marp_version = "latest", -- npx package version when falling back to npx
   close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
+  use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
 }
 ```
 
@@ -122,6 +124,19 @@ Marp CLI resolution order when `marp_command` is not set:
 2. Bundled install in the plugin's `deps/` directory
 3. Auto-install into `deps/` if `auto_install` is true
 4. `npx @marp-team/marp-cli@<marp_version>` if `use_npx_fallback` is true
+
+### Server directory in large projects
+
+By default, `:MarpStart` runs `marp --server` on the **current Markdown buffer's directory**, not Neovim's working directory. This avoids serving an entire repository (for example a Rails app root with `node_modules/`, `tmp/`, and thousands of files).
+
+Override when needed:
+
+```lua
+require("marp").setup({
+  server_dir = "/path/to/slides", -- always serve this directory
+  use_buffer_dir = false,         -- use vim.fn.getcwd() instead of the buffer path
+})
+```
 
 ### Close browser tab on stop
 

@@ -116,6 +116,24 @@ describe("marp.browser", function()
     end)
   end)
 
+  describe("open_dedicated", function()
+    it("skips killing existing processes when reopening", function()
+      local original_close = browser.close_dedicated
+      local close_called = false
+      browser.close_dedicated = function()
+        close_called = true
+      end
+
+      browser._dedicated_open = false
+      browser.open_dedicated("http://127.0.0.1:8080/", { reopen = true })
+
+      assert.is_false(close_called)
+
+      browser.close_dedicated = original_close
+      browser._dedicated_open = false
+    end)
+  end)
+
   describe("profile_marker", function()
     it("returns a stable marker for process cleanup", function()
       assert.equals("marp-nvim-preview", browser.profile_marker())

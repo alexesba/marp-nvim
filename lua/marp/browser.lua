@@ -332,7 +332,9 @@ function M.kill_dedicated_processes()
   end
 end
 
-function M.open_dedicated(url)
+function M.open_dedicated(url, opts)
+  opts = opts or {}
+
   if not M.dedicated_supported() then
     return false, "dedicated preview is not supported on this platform"
   end
@@ -347,7 +349,12 @@ function M.open_dedicated(url)
     return false, "could not resolve dedicated preview profile directory"
   end
 
-  M.close_dedicated()
+  if not opts.reopen then
+    M.close_dedicated()
+  else
+    M._dedicated_open = false
+  end
+
   M.prepare_dedicated_profile()
 
   local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile, url))
@@ -367,9 +374,13 @@ function M.close_dedicated()
 end
 
 --- Open the Marp preview in a browser appropriate for the current platform.
-function M.open_preview(url)
+---@param url string
+---@param opts? { reopen?: boolean }
+function M.open_preview(url, opts)
+  opts = opts or {}
+
   if M.uses_dedicated_preview() then
-    local ok, err = M.open_dedicated(url)
+    local ok, err = M.open_dedicated(url, opts)
     if ok then
       return true
     end

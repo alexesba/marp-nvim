@@ -34,7 +34,7 @@ Lazy (recommended — loads on Markdown buffers, installs Marp CLI on plugin ins
   {
     "alexesba/marp-nvim",
     ft = "markdown",
-    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
       require("marp").install(plugin.dir)
     end,
@@ -47,7 +47,7 @@ With a specific configuration:
   {
     "alexesba/marp-nvim",
     ft = "markdown",
-    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
     build = function(plugin)
       require("marp").install(plugin.dir)
     end,
@@ -67,7 +67,7 @@ With lazy.nvim `opts` (no separate `config` function needed):
   {
     "alexesba/marp-nvim",
     ft = "markdown",
-    cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
+    cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
     opts = {
       preview_browser = "dedicated",
     },
@@ -157,6 +157,8 @@ How dedicated mode works:
 3. `:MarpStop` kills only processes using that profile (presenter popups included)
 4. The profile is sanitized after each stop so the browser does not show a "Restore pages" prompt on the next preview
 
+If you close the preview window by mistake while Marp is still running, run `:MarpOpen` or `:MarpStart` again to reopen it.
+
 Dedicated mode requires a **Chromium-based** browser (Chrome, Chromium, or Edge). Safari and Firefox are not supported.
 
 #### Browser auto-detection
@@ -232,7 +234,8 @@ vim.keymap.set("n", "<leader>MS", "<cmd>MarpStatus<cr>", { noremap = true, silen
 ```
 
 The following commands are available:
-- `:MarpStart` - start the Marp server
+- `:MarpStart` - start the Marp server (reopens the preview if already running)
+- `:MarpOpen` - open the preview in the browser while the server is running
 - `:MarpStop` - stop the Marp server
 - `:MarpToggle` - toggle the Marp server (start/stop)
 - `:MarpStatus` - see if Marp server is running

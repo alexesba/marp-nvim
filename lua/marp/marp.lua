@@ -89,7 +89,7 @@ function M.start()
   end
 
   if marp_running() then
-    util.log_info("already running")
+    M.open()
     return
   end
 
@@ -127,6 +127,33 @@ function M.start()
   end
 
   browser.open_preview(util.preview_url(port))
+end
+
+--[[
+    Opens the Marp preview in the browser when the server is already running.
+    Useful after accidentally closing a dedicated preview window.
+    @usage
+    ```lua
+    local marp = require("marp")
+    marp.open()
+    ```
+]]
+function M.open()
+  lazy.apply()
+
+  if not marp_running() then
+    util.log_info("not running; use :MarpStart")
+    return
+  end
+
+  local port = config.options.port
+  if not util.wait_for_response(util.local_url(port), 5, 0.2) then
+    util.log_warn("server not responding")
+    return
+  end
+
+  browser.open_preview(util.preview_url(port), { reopen = true })
+  util.log_info("preview opened")
 end
 
 --[[

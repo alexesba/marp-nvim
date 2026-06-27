@@ -8,6 +8,7 @@ local M = {}
 
 M.setup = config.setup
 M.start = marp.start
+M.open = marp.open
 M.stop = marp.stop
 M.status = marp.status
 M.toggle = marp.toggle
@@ -20,6 +21,7 @@ local function register_commands()
   vim.g.marp_commands_registered = true
 
   vim.api.nvim_create_user_command("MarpStart", M.start, { desc = "Start Marp" })
+  vim.api.nvim_create_user_command("MarpOpen", M.open, { desc = "Open Marp preview in the browser" })
   vim.api.nvim_create_user_command("MarpStop", M.stop, { desc = "Stop Marp" })
   vim.api.nvim_create_user_command("MarpStatus", M.status, { desc = "Show Marp status" })
   vim.api.nvim_create_user_command("MarpToggle", M.toggle, { desc = "Toggle Marp (start/stop)" })

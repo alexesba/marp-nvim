@@ -134,12 +134,13 @@ require("marp").setup({
 How it works:
 
 1. Marp still runs on `port` (default `8080`)
-2. A small Node wrapper serves `http://127.0.0.1:<port+1>/` and **proxies Marp under `/marp/`** on the same origin
-3. The wrapper page uses Server-Sent Events (SSE) to receive a `close` event
-4. Injected scripts in proxied Marp pages listen for that close signal (via `postMessage`) and close presenter popups
-5. `:MarpStop` POSTs to `/close`, which tells the preview tab to shut down
+2. Neovim opens `http://127.0.0.1:<port+1>/launch`, which opens the preview tab via `window.open` so `:MarpStop` can close it reliably
+3. The preview wrapper proxies Marp under `/marp/` on the same origin
+4. The wrapper page uses Server-Sent Events (SSE) to receive a `close` event
+5. Injected scripts in proxied Marp pages listen for that close signal (via `postMessage`) and close presenter popups
+6. `:MarpStop` POSTs to `/close`, which shuts down the preview tab
 
-**Note:** `window.close()` is not guaranteed in every browser. If the tab stays open, it will show a short “preview closed” message instead of the Marp UI.
+**Note:** If your browser blocks popups, the preview falls back to opening directly and `window.close()` may not work after you interact with the page. You may see a short “preview closed” message instead.
 
 ## ⌨️ Keybindings
 This plugin does not set any keybindings by default. You can set them yourself like this:

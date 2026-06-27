@@ -20,6 +20,13 @@ const CLOSE_MESSAGE = "marp-close";
 let clients = [];
 
 const INJECT_SCRIPT = `<script>(function(){
+  try{
+    function storageShim(){
+      return{getItem:function(){return null},setItem:function(){},removeItem:function(){},clear:function(){},key:function(){return null},length:0};
+    }
+    Object.defineProperty(window,"sessionStorage",{get:storageShim,configurable:true});
+    Object.defineProperty(window,"localStorage",{get:storageShim,configurable:true});
+  }catch(e){}
   var MSG=${JSON.stringify(CLOSE_MESSAGE)};
   var closing=false;
   var popups=[];
@@ -101,23 +108,48 @@ function previewHtml() {
       try {
         iframe?.contentWindow?.postMessage(closeMessage, "*");
       } catch (_) {}
-      try {
-        iframe?.removeAttribute("src");
-        iframe?.remove();
-      } catch (_) {}
+      document.body.innerHTML =
+        '<p style="color:#888;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
+      document.body.style.background = "#111";
       window.close();
-      setTimeout(function () {
-        if (!document.hidden) {
-          document.body.innerHTML =
-            '<p style="color:#888;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
-        }
-      }, 150);
     }
 
     source.addEventListener("close", closePreview);
     source.onerror = function () {
       source.close();
     };
+  </script>
+</body>
+</html>`;
+}
+
+function launchHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Opening Marp Preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; color: #888; font: 16px sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+  <p id="status">Opening Marp preview...</p>
+  <script>
+    (function () {
+      const previewUrl = location.origin + "/";
+      const preview = window.open(previewUrl, "marp-preview");
+      const status = document.getElementById("status");
+      if (preview) {
+        try { preview.focus(); } catch (_) {}
+        try { window.close(); } catch (_) {}
+        status.textContent = "Marp preview opened in another tab. You can close this tab.";
+        return;
+      }
+      status.textContent = "Opening Marp preview...";
+      location.replace(previewUrl);
+    })();
   </script>
 </body>
 </html>`;
@@ -324,6 +356,12 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && urlPath === "/") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(previewHtml());
+    return;
+  }
+
+  if (req.method === "GET" && urlPath === "/launch") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(launchHtml());
     return;
   }
 

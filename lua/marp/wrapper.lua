@@ -26,7 +26,7 @@ function M.preview_url()
   if not M.wrapper_port then
     return nil
   end
-  return "http://127.0.0.1:" .. M.wrapper_port .. "/"
+  return "http://127.0.0.1:" .. M.wrapper_port .. "/launch"
 end
 
 function M.running()
@@ -69,7 +69,7 @@ function M.start(marp_port)
     return false, "failed to start preview wrapper"
   end
 
-  local url = M.preview_url()
+  local url = "http://127.0.0.1:" .. M.wrapper_port .. "/"
   if not util.wait_for_response(url, 10, 0.2) then
     M.stop()
     return false, "preview wrapper did not become ready"

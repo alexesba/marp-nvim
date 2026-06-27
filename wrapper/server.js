@@ -2,6 +2,7 @@
 "use strict";
 
 const http = require("http");
+const https = require("https");
 
 const marpPort = Number(process.argv[2]);
 const wrapperPort = Number(process.argv[3]);
@@ -13,6 +14,7 @@ if (!marpPort || !wrapperPort) {
 }
 
 const MARP_PREFIX = "/marp";
+const CDN_PROXY_PREFIX = "/marp-cdn/";
 const WATCH_NOTIFIER_PREFIX = "/.__marp-cli-watch-notifier__";
 const CLOSE_MESSAGE = "marp-close";
 
@@ -89,13 +91,37 @@ function previewHtml() {
   <meta charset="utf-8">
   <title>Marp Preview</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
-    iframe { width: 100%; height: 100%; border: 0; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
+    iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a1a;
+      color: #aaa;
+      font: 16px sans-serif;
+      z-index: 1;
+      pointer-events: none;
+    }
+    #loading.hidden { display: none; }
   </style>
 </head>
 <body>
   <iframe src="${MARP_PREFIX}/" title="Marp preview"></iframe>
+  <p id="loading">Loading Marp preview...</p>
   <script>
+    const iframe = document.querySelector("iframe");
+    const loading = document.getElementById("loading");
+    iframe.addEventListener("load", function () {
+      loading.classList.add("hidden");
+    });
+    setTimeout(function () {
+      if (!loading.classList.contains("hidden")) {
+        loading.textContent = "Preview is taking longer than expected. Is :MarpStart still running?";
+      }
+    }, 10000);
     const source = new EventSource("/events");
     const closeMessage = ${JSON.stringify({ type: CLOSE_MESSAGE })};
 
@@ -109,8 +135,8 @@ function previewHtml() {
         iframe?.contentWindow?.postMessage(closeMessage, "*");
       } catch (_) {}
       document.body.innerHTML =
-        '<p style="color:#888;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
-      document.body.style.background = "#111";
+        '<p style="color:#ccc;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
+      document.body.style.background = "#1a1a1a";
       window.close();
     }
 
@@ -271,7 +297,12 @@ function rewriteLocation(location) {
   return location;
 }
 
+function rewriteCdnUrls(body) {
+  return body.replace(/https:\/\/cdn\.jsdelivr\.net\//g, `${CDN_PROXY_PREFIX}cdn.jsdelivr.net/`);
+}
+
 function injectIntoHtml(body) {
+  body = rewriteCdnUrls(body);
   const baseTag = `<base href="${MARP_PREFIX}/">`;
   if (/<base\s/i.test(body)) {
     return body.replace(/<\/body>/i, `${INJECT_SCRIPT}</body>`);
@@ -283,6 +314,42 @@ function injectIntoHtml(body) {
     return body.replace(/<\/body>/i, `${INJECT_SCRIPT}</body>`);
   }
   return body + INJECT_SCRIPT;
+}
+
+function cdnUpstreamPath(urlPath) {
+  if (urlPath.startsWith(CDN_PROXY_PREFIX)) {
+    return urlPath.slice(CDN_PROXY_PREFIX.length);
+  }
+  return null;
+}
+
+function proxyToCdn(req, res, upstreamPath) {
+  const queryIndex = (req.url || "").indexOf("?");
+  const query = queryIndex >= 0 ? (req.url || "").slice(queryIndex) : "";
+  const target = `https://${upstreamPath}${query}`;
+
+  https
+    .get(target, (proxyRes) => {
+      const headers = filterResponseHeaders(proxyRes.headers);
+      res.writeHead(proxyRes.statusCode || 502, headers);
+      proxyRes.pipe(res);
+    })
+    .on("error", () => {
+      if (!res.headersSent) {
+        res.writeHead(502, { "Content-Type": "text/plain" });
+      }
+      res.end("cdn proxy error");
+    });
+}
+
+function rewriteProxiedBody(body, contentType) {
+  if (contentType.includes("text/html")) {
+    return injectIntoHtml(body);
+  }
+  if (contentType.includes("text/css") || contentType.includes("javascript")) {
+    return rewriteCdnUrls(body);
+  }
+  return body;
 }
 
 function filterRequestHeaders(headers) {
@@ -323,7 +390,7 @@ function proxyToMarp(req, res, upstreamPath) {
         return;
       }
 
-      if (!contentType.includes("text/html")) {
+      if (!contentType.includes("text/html") && !contentType.includes("text/css") && !contentType.includes("javascript")) {
         res.writeHead(proxyRes.statusCode, headers);
         proxyRes.pipe(res);
         return;
@@ -332,7 +399,7 @@ function proxyToMarp(req, res, upstreamPath) {
       const chunks = [];
       proxyRes.on("data", (chunk) => chunks.push(chunk));
       proxyRes.on("end", () => {
-        const body = injectIntoHtml(Buffer.concat(chunks).toString("utf8"));
+        const body = rewriteProxiedBody(Buffer.concat(chunks).toString("utf8"), contentType);
         delete headers["content-length"];
         res.writeHead(proxyRes.statusCode, headers);
         res.end(body);
@@ -389,6 +456,12 @@ const server = http.createServer((req, res) => {
   const upstreamPath = marpUpstreamPath(urlPath);
   if (upstreamPath !== null) {
     proxyToMarp(req, res, upstreamPath);
+    return;
+  }
+
+  const cdnPath = cdnUpstreamPath(urlPath);
+  if (cdnPath !== null) {
+    proxyToCdn(req, res, cdnPath);
     return;
   }
 

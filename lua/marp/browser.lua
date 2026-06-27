@@ -66,6 +66,34 @@ function M.profile_dir_win()
   return temp .. sep .. PROFILE_DIR_NAME
 end
 
+--- Chromium flags for a dedicated preview profile (Edge on WSL).
+function M.dedicated_edge_launch_flags(profile)
+  return {
+    "--user-data-dir=" .. profile,
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--hide-crash-restore-bubble",
+    "--new-window",
+  }
+end
+
+--- Clear crash-restore state after force-closing the dedicated profile.
+function M.sanitize_wsl_profile(profile_win)
+  local escaped = profile_win:gsub("'", "''")
+  local ps = string.format(
+    [[$paths = @('%s\Default\Preferences', '%s\Local State'); foreach ($path in $paths) { if (-not (Test-Path -LiteralPath $path)) { continue }; $content = Get-Content -LiteralPath $path -Raw; $content = $content -replace '"exited_cleanly"\s*:\s*false', '"exited_cleanly":true'; $content = $content -replace '"exit_type"\s*:\s*"[^"]*"', '"exit_type":"Normal"'; [System.IO.File]::WriteAllText($path, $content) }]],
+    escaped,
+    escaped
+  )
+
+  vim.system({
+    "powershell.exe",
+    "-NoProfile",
+    "-Command",
+    ps,
+  }, { text = true }):wait()
+end
+
 function M.find_edge_executable()
   local opts = config.options
   if opts.wsl_browser and opts.wsl_browser ~= "" then
@@ -104,15 +132,12 @@ function M.open_wsl_dedicated(url)
   end
 
   M.close_wsl_dedicated()
+  M.sanitize_wsl_profile(profile)
 
-  local jobid = vim.fn.jobstart({
-    edge,
-    "--user-data-dir=" .. profile,
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--new-window",
-    url,
-  }, { detach = true })
+  local argv = vim.list_extend({ edge }, M.dedicated_edge_launch_flags(profile))
+  table.insert(argv, url)
+
+  local jobid = vim.fn.jobstart(argv, { detach = true })
 
   if jobid <= 0 then
     return false, "failed to launch Microsoft Edge"
@@ -136,6 +161,11 @@ function M.close_wsl_dedicated()
     "-Command",
     ps,
   }, { text = true }):wait()
+
+  local profile = M.profile_dir_win()
+  if profile then
+    M.sanitize_wsl_profile(profile)
+  end
 end
 
 --- Open the Marp preview in a browser appropriate for the current platform.

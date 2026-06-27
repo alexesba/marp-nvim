@@ -151,6 +151,8 @@ How dedicated mode works on WSL:
 3. The preview URL uses the WSL VM IP (see below) so Windows can reach the server
 4. `:MarpStop` kills only Edge processes using that profile (presenter popups included)
 
+The dedicated profile is sanitized after each stop so Edge does not show a "Restore pages" prompt on the next preview.
+
 Optional overrides:
 
 ```lua

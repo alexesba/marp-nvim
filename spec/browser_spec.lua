@@ -58,6 +58,17 @@ describe("marp.browser", function()
     end)
   end)
 
+  describe("dedicated_edge_launch_flags", function()
+    it("includes flags that suppress session restore UI", function()
+      local flags = browser.dedicated_edge_launch_flags("C:\\Temp\\marp-nvim-preview")
+      local joined = table.concat(flags, " ")
+
+      assert.matches("marp%-nvim%-preview", joined)
+      assert.matches("hide%-crash%-restore%-bubble", joined)
+      assert.matches("no%-first%-run", joined)
+    end)
+  end)
+
   describe("profile_marker", function()
     it("returns a stable marker for process cleanup", function()
       assert.equals("marp-nvim-preview", browser.profile_marker())

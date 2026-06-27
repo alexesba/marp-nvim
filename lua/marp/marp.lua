@@ -84,7 +84,9 @@ function M.start()
   local server_dir = util.resolve_server_dir()
 
   if not util.can_start_server() then
-    util.log_info("no Markdown files found, exiting!")
+    local dir = util.display_server_dir(server_dir)
+    local where = dir == "/." and "the current directory" or dir
+    util.log_warn("no markdown files found in " .. where)
     return
   end
 

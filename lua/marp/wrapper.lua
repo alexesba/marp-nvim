@@ -26,7 +26,7 @@ function M.preview_url()
   if not M.wrapper_port then
     return nil
   end
-  return "http://127.0.0.1:" .. M.wrapper_port .. "/launch"
+  return "http://127.0.0.1:" .. M.wrapper_port .. "/"
 end
 
 function M.running()

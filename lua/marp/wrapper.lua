@@ -94,6 +94,9 @@ function M.stop()
     "http://127.0.0.1:" .. wrapper_port .. "/close",
   }, { text = true }):wait()
 
+  -- Give the browser time to handle the close signal before Marp stops.
+  util.wait(0.4)
+
   M.wrapper_port = nil
   M.jobid = 0
 

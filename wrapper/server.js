@@ -14,16 +14,34 @@ if (!marpPort || !wrapperPort) {
 
 const MARP_PREFIX = "/marp";
 const WATCH_NOTIFIER_PREFIX = "/.__marp-cli-watch-notifier__";
-const CLOSE_KEY = "marp-close";
 const CLOSE_MESSAGE = "marp-close";
 
 /** @type {import("http").ServerResponse[]} */
 let clients = [];
 
 const INJECT_SCRIPT = `<script>(function(){
-  var KEY=${JSON.stringify(CLOSE_KEY)};
   var MSG=${JSON.stringify(CLOSE_MESSAGE)};
+  var closing=false;
   var popups=[];
+  var OrigWS=window.WebSocket;
+  window.WebSocket=function(url,protocols){
+    var ws=protocols!==undefined?new OrigWS(url,protocols):new OrigWS(url);
+    var origAdd=ws.addEventListener.bind(ws);
+    ws.addEventListener=function(type,listener,options){
+      if(type==="close"){
+        return origAdd(type,function(ev){
+          if(!closing)listener(ev);
+        },options);
+      }
+      return origAdd(type,listener,options);
+    };
+    return ws;
+  };
+  window.WebSocket.prototype=OrigWS.prototype;
+  window.WebSocket.CONNECTING=OrigWS.CONNECTING;
+  window.WebSocket.OPEN=OrigWS.OPEN;
+  window.WebSocket.CLOSING=OrigWS.CLOSING;
+  window.WebSocket.CLOSED=OrigWS.CLOSED;
   var origOpen=window.open;
   window.open=function(){
     var w=origOpen.apply(this,arguments);
@@ -31,15 +49,29 @@ const INJECT_SCRIPT = `<script>(function(){
     return w;
   };
   function shutdown(){
-    popups.forEach(function(w){try{w.close();}catch(e){}});
+    if(closing)return;
+    closing=true;
+    delete window.__marpCliWatchWS;
+    try{
+      var id=setTimeout(function(){},0);
+      for(var i=0;i<=id;i++)clearTimeout(i);
+    }catch(e){}
+    popups.forEach(function(w){
+      try{
+        w.__marpPreviewShutdown?.();
+        w.postMessage({type:MSG},"*");
+        w.close();
+      }catch(e){}
+    });
     popups=[];
+    try{
+      document.documentElement.innerHTML="<html><head><title>Marp Preview Closed</title></head><body style=\\"margin:0;background:#111;color:#888;font:16px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\\">Marp preview closed.</body></html>";
+    }catch(e){}
     try{window.close();}catch(e){}
   }
+  window.__marpPreviewShutdown=shutdown;
   window.addEventListener("message",function(e){
     if(e.data&&e.data.type===MSG)shutdown();
-  });
-  window.addEventListener("storage",function(e){
-    if(e.key===KEY)shutdown();
   });
 })();<\/script>`;
 
@@ -59,24 +91,25 @@ function previewHtml() {
   <script>
     const source = new EventSource("/events");
     const closeMessage = ${JSON.stringify({ type: CLOSE_MESSAGE })};
-    const closeKey = ${JSON.stringify(CLOSE_KEY)};
 
     function closePreview() {
       source.close();
       const iframe = document.querySelector("iframe");
       try {
-        localStorage.setItem(closeKey, String(Date.now()));
-        localStorage.removeItem(closeKey);
+        iframe?.contentWindow?.__marpPreviewShutdown?.();
       } catch (_) {}
       try {
         iframe?.contentWindow?.postMessage(closeMessage, "*");
+      } catch (_) {}
+      try {
+        iframe?.removeAttribute("src");
+        iframe?.remove();
       } catch (_) {}
       window.close();
       setTimeout(function () {
         if (!document.hidden) {
           document.body.innerHTML =
             '<p style="color:#888;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
-          try { iframe?.remove(); } catch (_) {}
         }
       }, 150);
     }

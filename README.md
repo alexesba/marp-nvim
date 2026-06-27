@@ -136,7 +136,7 @@ How it works:
 1. Marp still runs on `port` (default `8080`)
 2. A small Node wrapper serves `http://127.0.0.1:<port+1>/` and **proxies Marp under `/marp/`** on the same origin
 3. The wrapper page uses Server-Sent Events (SSE) to receive a `close` event
-4. Injected scripts in proxied Marp pages listen for that close signal (via `postMessage` and `localStorage`) and close presenter popups
+4. Injected scripts in proxied Marp pages listen for that close signal (via `postMessage`) and close presenter popups
 5. `:MarpStop` POSTs to `/close`, which tells the preview tab to shut down
 
 **Note:** `window.close()` is not guaranteed in every browser. If the tab stays open, it will show a short “preview closed” message instead of the Marp UI.

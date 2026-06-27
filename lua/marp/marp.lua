@@ -125,12 +125,12 @@ function M.start()
 
   ensure_exit_cleanup()
 
-  if not util.wait_for_response("http://localhost:" .. port, wait_for_response_timeout, wait_for_response_delay) then
+  if not util.wait_for_response(util.local_url(port), wait_for_response_timeout, wait_for_response_delay) then
     stop_jobs()
     return
   end
 
-  local preview_url = "http://localhost:" .. port
+  local preview_url = util.preview_url(port)
 
   if config.options.close_browser_on_stop then
     local ok, err = wrapper.start(port)

@@ -115,12 +115,82 @@ function M.dedicated_launch_flags(profile, url)
     "--no-first-run",
     "--no-default-browser-check",
     "--hide-crash-restore-bubble",
+    "--disable-sync",
     "--app=" .. url,
   }
 end
 
 --- Backward-compatible alias.
 M.dedicated_edge_launch_flags = M.dedicated_launch_flags
+
+local function default_preferences()
+  return {
+    bookmark_bar = { show_on_all_tabs = false },
+    browser = { show_bookmark_bar = false },
+    distribution = {
+      import_bookmarks = false,
+      skip_first_run_ui = true,
+    },
+    profile = {
+      exit_type = "Normal",
+      exited_cleanly = true,
+    },
+  }
+end
+
+local function patch_preferences_table(prefs)
+  prefs.bookmark_bar = prefs.bookmark_bar or {}
+  prefs.bookmark_bar.show_on_all_tabs = false
+  prefs.browser = prefs.browser or {}
+  prefs.browser.show_bookmark_bar = false
+  prefs.distribution = prefs.distribution or {}
+  prefs.distribution.import_bookmarks = false
+  prefs.distribution.skip_first_run_ui = true
+  prefs.profile = prefs.profile or {}
+  prefs.profile.exited_cleanly = true
+  prefs.profile.exit_type = "Normal"
+  return prefs
+end
+
+local function write_preferences(path, prefs)
+  vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+  local file = io.open(path, "w")
+  if not file then
+    return
+  end
+  file:write(vim.json.encode(prefs))
+  file:close()
+end
+
+local function prepare_preferences_file(path)
+  local file = io.open(path, "r")
+  if not file then
+    write_preferences(path, default_preferences())
+    return
+  end
+
+  local content = file:read("*a")
+  file:close()
+
+  local ok, prefs = pcall(vim.json.decode, content)
+  if ok and type(prefs) == "table" then
+    write_preferences(path, patch_preferences_table(prefs))
+    return
+  end
+
+  content = content:gsub('"exited_cleanly"%s*:%s*false', '"exited_cleanly":true')
+  content = content:gsub('"exit_type"%s*:%s*"[^"]*"', '"exit_type":"Normal"')
+  content = content:gsub('"show_on_all_tabs"%s*:%s*true', '"show_on_all_tabs":false')
+  content = content:gsub('"show_bookmark_bar"%s*:%s*true', '"show_bookmark_bar":false')
+  content = content:gsub('"import_bookmarks"%s*:%s*true', '"import_bookmarks":false')
+
+  file = io.open(path, "w")
+  if not file then
+    return
+  end
+  file:write(content)
+  file:close()
+end
 
 local function sanitize_profile_file(path)
   local file = io.open(path, "r")
@@ -143,16 +213,31 @@ local function sanitize_profile_file(path)
   file:close()
 end
 
-function M.sanitize_chromium_profile(profile_dir, separator)
+function M.prepare_chromium_profile(profile_dir, separator)
   separator = separator or "/"
-  sanitize_profile_file(profile_dir .. separator .. "Default" .. separator .. "Preferences")
+  prepare_preferences_file(profile_dir .. separator .. "Default" .. separator .. "Preferences")
   sanitize_profile_file(profile_dir .. separator .. "Local State")
+end
+
+--- Backward-compatible alias.
+function M.sanitize_chromium_profile(profile_dir, separator)
+  M.prepare_chromium_profile(profile_dir, separator)
+end
+
+function M.prepare_wsl_profile(profile_win)
+  local profile_wsl = M.win_to_wsl(profile_win)
+  if profile_wsl then
+    M.prepare_chromium_profile(profile_wsl, "/")
+    return
+  end
+
+  M.sanitize_wsl_profile(profile_win)
 end
 
 function M.sanitize_wsl_profile(profile_win)
   local escaped = profile_win:gsub("'", "''")
   local ps = string.format(
-    [[$paths = @('%s\Default\Preferences', '%s\Local State'); foreach ($path in $paths) { if (-not (Test-Path -LiteralPath $path)) { continue }; $content = Get-Content -LiteralPath $path -Raw; $content = $content -replace '"exited_cleanly"\s*:\s*false', '"exited_cleanly":true'; $content = $content -replace '"exit_type"\s*:\s*"[^"]*"', '"exit_type":"Normal"'; [System.IO.File]::WriteAllText($path, $content) }]],
+    [[$paths = @('%s\Default\Preferences', '%s\Local State'); foreach ($path in $paths) { if (-not (Test-Path -LiteralPath $path)) { continue }; $content = Get-Content -LiteralPath $path -Raw; $content = $content -replace '"exited_cleanly"\s*:\s*false', '"exited_cleanly":true'; $content = $content -replace '"exit_type"\s*:\s*"[^"]*"', '"exit_type":"Normal"'; $content = $content -replace '"show_on_all_tabs"\s*:\s*true', '"show_on_all_tabs":false'; $content = $content -replace '"show_bookmark_bar"\s*:\s*true', '"show_bookmark_bar":false'; $content = $content -replace '"import_bookmarks"\s*:\s*true', '"import_bookmarks":false'; [System.IO.File]::WriteAllText($path, $content) }]],
     escaped,
     escaped
   )
@@ -228,9 +313,9 @@ function M.closes_on_stop()
   return M.uses_dedicated_preview() and M.dedicated_supported()
 end
 
-local function launch_dedicated(browser, profile, url, sanitize_fn)
+local function launch_dedicated(browser, profile, url, prepare_fn)
   M.close_dedicated()
-  sanitize_fn(profile)
+  prepare_fn(profile)
 
   local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile, url))
 
@@ -254,7 +339,7 @@ function M.open_wsl_dedicated(url)
     return false, "could not resolve Windows TEMP directory"
   end
 
-  return launch_dedicated(edge, profile, url, M.sanitize_wsl_profile)
+  return launch_dedicated(edge, profile, url, M.prepare_wsl_profile)
 end
 
 function M.close_wsl_dedicated()
@@ -274,7 +359,7 @@ function M.close_wsl_dedicated()
 
   local profile = M.profile_dir_win()
   if profile then
-    M.sanitize_wsl_profile(profile)
+    M.prepare_wsl_profile(profile)
   end
 end
 
@@ -286,7 +371,7 @@ function M.open_unix_dedicated(url)
 
   local profile = M.profile_dir_unix()
   return launch_dedicated(browser, profile, url, function(dir)
-    M.sanitize_chromium_profile(dir, "/")
+    M.prepare_chromium_profile(dir, "/")
   end)
 end
 
@@ -297,7 +382,7 @@ function M.close_unix_dedicated()
 
   local profile = M.profile_dir_unix()
   if profile then
-    M.sanitize_chromium_profile(profile, "/")
+    M.prepare_chromium_profile(profile, "/")
   end
 end
 

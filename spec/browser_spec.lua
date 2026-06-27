@@ -81,7 +81,27 @@ describe("marp.browser", function()
       assert.matches("hide%-crash%-restore%-bubble", joined)
       assert.matches("no%-first%-run", joined)
       assert.matches("--app=http://127%.0%.0%.1:8080/", joined)
+      assert.matches("disable%-sync", joined)
       assert.is_not.matches("new%-window", joined)
+    end)
+  end)
+
+  describe("prepare_chromium_profile", function()
+    it("writes preferences that disable bookmarks for a new profile", function()
+      local dir = vim.fn.tempname()
+      vim.fn.mkdir(dir, "p")
+
+      browser.prepare_chromium_profile(dir, "/")
+
+      local file = io.open(dir .. "/Default/Preferences", "r")
+      local prefs = vim.json.decode(file:read("*a"))
+      file:close()
+
+      assert.is_false(prefs.bookmark_bar.show_on_all_tabs)
+      assert.is_false(prefs.browser.show_bookmark_bar)
+      assert.is_false(prefs.distribution.import_bookmarks)
+
+      vim.fn.delete(dir, "rf")
     end)
   end)
 

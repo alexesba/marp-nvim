@@ -182,6 +182,14 @@ function M.find_edge_executable()
   return nil
 end
 
+local function resolve_on_path(name)
+  local path = vim.fn.exepath(name)
+  if path ~= "" then
+    return path
+  end
+  return nil
+end
+
 function M.find_chromium_executable()
   local opts = config.options
   if opts.dedicated_browser and opts.dedicated_browser ~= "" then
@@ -191,8 +199,9 @@ function M.find_chromium_executable()
   end
 
   for _, name in ipairs(UNIX_BROWSER_NAMES) do
-    if vim.fn.executable(name) == 1 then
-      return name
+    local path = resolve_on_path(name)
+    if path then
+      return path
     end
   end
 

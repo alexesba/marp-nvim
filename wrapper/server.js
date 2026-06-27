@@ -7,9 +7,10 @@ const https = require("https");
 const marpPort = Number(process.argv[2]);
 const wrapperPort = Number(process.argv[3]);
 const marpHost = process.argv[4] || "127.0.0.1";
+const bindHost = process.argv[5] || "127.0.0.1";
 
 if (!marpPort || !wrapperPort) {
-  console.error("usage: node server.js <marp-port> <wrapper-port> [marp-host]");
+  console.error("usage: node server.js <marp-port> <wrapper-port> [marp-host] [bind-host]");
   process.exit(1);
 }
 
@@ -440,7 +441,7 @@ server.on("upgrade", (req, socket, head) => {
   proxyWebSocket(req, socket, head);
 });
 
-server.listen(wrapperPort, "127.0.0.1", () => {
+server.listen(wrapperPort, bindHost, () => {
   process.stdout.write(`ready:${wrapperPort}\n`);
 });
 

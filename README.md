@@ -96,6 +96,7 @@ The following defaults are provided:
   marp_version = "latest", -- npx package version when falling back to npx
   close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
   wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
 }
@@ -140,6 +141,24 @@ How it works:
 5. `:MarpStop` POSTs to `/close`, which clears the preview and attempts to close the tab
 
 **Note:** `window.close()` is not guaranteed in every browser. If the tab stays open, it will show a short “Marp preview closed. You can close this tab.” message.
+
+### WSL (Windows)
+
+Neovim in WSL opens the preview in your **Windows** browser (via `wslview`). The preview wrapper listens on `127.0.0.1` by default, which Windows cannot reach.
+
+On WSL the plugin automatically:
+
+1. Binds the preview wrapper to `0.0.0.0`
+2. Opens the browser using the WSL VM IP (from `hostname -I`)
+3. Points the wrapper iframe at the same host so Marp loads correctly
+
+If auto-detection fails, set the host manually:
+
+```lua
+require("marp").setup({
+  preview_host = "172.21.17.252", -- output of: hostname -I | awk '{print $1}'
+})
+```
 
 ## ⌨️ Keybindings
 This plugin does not set any keybindings by default. You can set them yourself like this:

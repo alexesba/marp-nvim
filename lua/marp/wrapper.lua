@@ -26,7 +26,7 @@ function M.preview_url()
   if not M.wrapper_port then
     return nil
   end
-  return "http://127.0.0.1:" .. M.wrapper_port .. "/"
+  return util.preview_url(M.wrapper_port)
 end
 
 function M.running()
@@ -55,6 +55,8 @@ function M.start(marp_port)
     script,
     tostring(marp_port),
     tostring(wrapper_port),
+    "127.0.0.1",
+    util.wrapper_bind_host(),
   }, {
     stdout_buffered = true,
     stderr_buffered = true,
@@ -69,8 +71,7 @@ function M.start(marp_port)
     return false, "failed to start preview wrapper"
   end
 
-  local url = "http://127.0.0.1:" .. M.wrapper_port .. "/"
-  if not util.wait_for_response(url, 10, 0.2) then
+  if not util.wait_for_response(util.local_url(wrapper_port), 10, 0.2) then
     M.stop()
     return false, "preview wrapper did not become ready"
   end
@@ -91,7 +92,7 @@ function M.stop()
     "-s",
     "-X",
     "POST",
-    "http://127.0.0.1:" .. wrapper_port .. "/close",
+    util.local_url(wrapper_port, "/close"),
   }, { text = true }):wait()
 
   -- Give the browser time to handle the close signal before Marp stops.

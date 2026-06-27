@@ -33,39 +33,86 @@ describe("marp.browser", function()
     end)
   end)
 
+  describe("profile_launch_path", function()
+    it("uses dedicated_preview_profile when set", function()
+      config.setup({ dedicated_preview_profile = "/tmp/custom-preview" })
+      assert.equals("/tmp/custom-preview", browser.profile_launch_path())
+    end)
+
+    it("defaults to TMPDIR/marp-nvim-preview on unix", function()
+      local original_platform = browser.platform
+      local original = vim.env.TMPDIR
+
+      browser.platform = function()
+        return "unix"
+      end
+      vim.env.TMPDIR = "/var/tmp"
+
+      assert.equals("/var/tmp/marp-nvim-preview", browser.profile_launch_path())
+
+      browser.platform = original_platform
+      vim.env.TMPDIR = original
+    end)
+  end)
+
   describe("closes_on_stop", function()
     it("is false by default", function()
       assert.is_false(browser.closes_on_stop())
     end)
 
-    it("requires preview_browser dedicated and WSL", function()
+    it("is true when preview_browser is dedicated on a supported platform", function()
       config.setup({ preview_browser = "dedicated" })
 
-      local original_is_wsl = require("marp.util").is_wsl
-      local util = require("marp.util")
-
-      util.is_wsl = function()
-        return false
-      end
-      assert.is_false(browser.closes_on_stop())
-
-      util.is_wsl = function()
-        return true
+      local original_platform = browser.platform
+      browser.platform = function()
+        return "unix"
       end
       assert.is_true(browser.closes_on_stop())
 
-      util.is_wsl = original_is_wsl
+      browser.platform = function()
+        return "wsl"
+      end
+      assert.is_true(browser.closes_on_stop())
+
+      browser.platform = function()
+        return "other"
+      end
+      assert.is_false(browser.closes_on_stop())
+
+      browser.platform = original_platform
     end)
   end)
 
-  describe("dedicated_edge_launch_flags", function()
-    it("includes flags that suppress session restore UI", function()
-      local flags = browser.dedicated_edge_launch_flags("C:\\Temp\\marp-nvim-preview")
+  describe("dedicated_launch_flags", function()
+    it("opens in app mode without a separate URL argument", function()
+      local flags = browser.dedicated_launch_flags("/tmp/marp-nvim-preview", "http://127.0.0.1:8080/")
       local joined = table.concat(flags, " ")
 
       assert.matches("marp%-nvim%-preview", joined)
       assert.matches("hide%-crash%-restore%-bubble", joined)
       assert.matches("no%-first%-run", joined)
+      assert.matches("--app=http://127%.0%.0%.1:8080/", joined)
+      assert.matches("disable%-sync", joined)
+      assert.is_not.matches("new%-window", joined)
+    end)
+  end)
+
+  describe("prepare_chromium_profile", function()
+    it("writes preferences that disable bookmarks for a new profile", function()
+      local dir = vim.fn.tempname()
+      vim.fn.mkdir(dir, "p")
+
+      browser.prepare_chromium_profile(dir, "/")
+
+      local file = io.open(dir .. "/Default/Preferences", "r")
+      local prefs = vim.json.decode(file:read("*a"))
+      file:close()
+
+      assert.is_false(prefs.bookmark_bar.show_on_all_tabs)
+      assert.is_false(prefs.browser.show_bookmark_bar)
+      assert.is_false(prefs.distribution.import_bookmarks)
+
+      vim.fn.delete(dir, "rf")
     end)
   end)
 

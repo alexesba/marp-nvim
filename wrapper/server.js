@@ -74,9 +74,13 @@ const INJECT_SCRIPT = `<script>(function(){
     });
     popups=[];
     try{
-      document.documentElement.innerHTML="<html><head><title>Marp Preview Closed</title></head><body style=\\"margin:0;background:#111;color:#888;font:16px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\\">Marp preview closed.</body></html>";
+      document.documentElement.innerHTML="<html><head><title>Marp Preview Closed</title></head><body style=\\"margin:0;background:#1a1a1a;color:#ccc;font:16px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\\">Marp preview closed.</body></html>";
     }catch(e){}
-    try{window.close();}catch(e){}
+    try{
+      if(window.top===window&&new URLSearchParams(window.top.location.search).get("closeable")==="1"){
+        window.top.close();
+      }
+    }catch(e){}
   }
   window.__marpPreviewShutdown=shutdown;
   window.addEventListener("message",function(e){
@@ -124,6 +128,13 @@ function previewHtml() {
     }, 10000);
     const source = new EventSource("/events");
     const closeMessage = ${JSON.stringify({ type: CLOSE_MESSAGE })};
+    const canAutoClose = new URLSearchParams(location.search).get("closeable") === "1";
+
+    function showClosedMessage() {
+      document.body.innerHTML =
+        '<p style="color:#ccc;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
+      document.body.style.background = "#1a1a1a";
+    }
 
     function closePreview() {
       source.close();
@@ -134,10 +145,10 @@ function previewHtml() {
       try {
         iframe?.contentWindow?.postMessage(closeMessage, "*");
       } catch (_) {}
-      document.body.innerHTML =
-        '<p style="color:#ccc;text-align:center;margin-top:40vh;font:16px sans-serif">Marp preview closed. You can close this tab.</p>';
-      document.body.style.background = "#1a1a1a";
-      window.close();
+      showClosedMessage();
+      if (canAutoClose) {
+        window.close();
+      }
     }
 
     source.addEventListener("close", closePreview);
@@ -164,7 +175,8 @@ function launchHtml() {
   <p id="status">Opening Marp preview...</p>
   <script>
     (function () {
-      const previewUrl = location.origin + "/";
+      const previewUrl = location.origin + "/?closeable=1";
+      const manualUrl = location.origin + "/?closeable=0";
       const preview = window.open(previewUrl, "marp-preview");
       const status = document.getElementById("status");
       if (preview) {
@@ -173,8 +185,9 @@ function launchHtml() {
         status.textContent = "Marp preview opened in another tab. You can close this tab.";
         return;
       }
-      status.textContent = "Opening Marp preview...";
-      location.replace(previewUrl);
+      status.innerHTML =
+        "Popup blocked. Allow popups for 127.0.0.1 to auto-close the preview on :MarpStop, " +
+        'or <a href="' + manualUrl + '" style="color:#8cf">open preview anyway</a>.';
     })();
   </script>
 </body>

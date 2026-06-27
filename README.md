@@ -163,8 +163,6 @@ require("marp").setup({
 })
 ```
 
-`close_browser_on_stop` is deprecated and maps to `preview_browser = "dedicated"`.
-
 ### WSL (Windows)
 
 Neovim in WSL opens the preview in your **Windows** browser. `127.0.0.1` in WSL is not reachable from Windows, so the plugin uses the WSL VM IP for preview URLs.

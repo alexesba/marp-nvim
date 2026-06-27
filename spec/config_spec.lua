@@ -45,13 +45,6 @@ describe("marp.config", function()
     assert.is_true(config.options.use_buffer_dir)
   end)
 
-  it("maps deprecated close_browser_on_stop to preview_browser", function()
-    config.setup({ close_browser_on_stop = true })
-
-    assert.equals("dedicated", config.options.preview_browser)
-    assert.is_nil(config.options.close_browser_on_stop)
-  end)
-
   it("falls back to system for invalid preview_browser values", function()
     config.setup({ preview_browser = "chrome" })
 

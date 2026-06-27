@@ -19,17 +19,6 @@ local defaults = {
 M.options = {}
 
 local function normalize_preview_browser(opts)
-  if opts.close_browser_on_stop ~= nil then
-    if opts.preview_browser == nil or opts.preview_browser == defaults.preview_browser then
-      opts.preview_browser = opts.close_browser_on_stop and "dedicated" or "system"
-    end
-    vim.notify(
-      "marp-nvim: close_browser_on_stop is deprecated; use preview_browser = \"dedicated\"",
-      vim.log.levels.WARN
-    )
-    opts.close_browser_on_stop = nil
-  end
-
   if opts.preview_browser ~= "system" and opts.preview_browser ~= "dedicated" then
     vim.notify(
       'marp-nvim: invalid preview_browser "' .. tostring(opts.preview_browser) .. '"; using "system"',

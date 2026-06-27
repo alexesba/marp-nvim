@@ -13,6 +13,7 @@ if (!marpPort || !wrapperPort) {
 }
 
 const MARP_PREFIX = "/marp";
+const WATCH_NOTIFIER_PREFIX = "/.__marp-cli-watch-notifier__";
 const CLOSE_KEY = "marp-close";
 const CLOSE_MESSAGE = "marp-close";
 
@@ -105,6 +106,13 @@ function notifyClose() {
   clients = [];
 }
 
+function isWatchNotifierPath(urlPath) {
+  return (
+    urlPath === WATCH_NOTIFIER_PREFIX ||
+    urlPath.startsWith(WATCH_NOTIFIER_PREFIX + "/")
+  );
+}
+
 function marpUpstreamPath(urlPath) {
   if (urlPath === MARP_PREFIX) {
     return "/";
@@ -113,7 +121,75 @@ function marpUpstreamPath(urlPath) {
     const upstream = urlPath.slice(MARP_PREFIX.length);
     return upstream === "" ? "/" : upstream;
   }
+  if (isWatchNotifierPath(urlPath)) {
+    return urlPath;
+  }
   return null;
+}
+
+function writeRawHeaders(socket, statusLine, headers) {
+  const lines = [statusLine];
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        lines.push(`${key}: ${entry}`);
+      }
+    } else {
+      lines.push(`${key}: ${value}`);
+    }
+  }
+  socket.write(`${lines.join("\r\n")}\r\n\r\n`);
+}
+
+function proxyWebSocket(req, clientSocket, head) {
+  const headers = { ...req.headers, host: `${marpHost}:${marpPort}` };
+  delete headers["proxy-connection"];
+
+  const proxyReq = http.request({
+    hostname: marpHost,
+    port: marpPort,
+    path: req.url,
+    method: req.method,
+    headers,
+  });
+
+  proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
+    writeRawHeaders(
+      clientSocket,
+      `HTTP/1.1 ${proxyRes.statusCode} ${proxyRes.statusMessage}`,
+      proxyRes.headers
+    );
+    if (proxyHead.length) {
+      clientSocket.write(proxyHead);
+    }
+    if (head.length) {
+      proxySocket.write(head);
+    }
+    proxySocket.pipe(clientSocket);
+    clientSocket.pipe(proxySocket);
+  });
+
+  proxyReq.on("response", (proxyRes) => {
+    writeRawHeaders(
+      clientSocket,
+      `HTTP/1.1 ${proxyRes.statusCode} ${proxyRes.statusMessage}`,
+      proxyRes.headers
+    );
+    proxyRes.pipe(clientSocket);
+  });
+
+  proxyReq.on("error", () => {
+    clientSocket.destroy();
+  });
+
+  clientSocket.on("error", () => {
+    proxyReq.destroy();
+  });
+
+  proxyReq.end();
 }
 
 function rewriteLocation(location) {
@@ -247,6 +323,15 @@ const server = http.createServer((req, res) => {
 
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("not found");
+});
+
+server.on("upgrade", (req, socket, head) => {
+  const urlPath = (req.url || "").split("?")[0];
+  if (!isWatchNotifierPath(urlPath)) {
+    socket.destroy();
+    return;
+  }
+  proxyWebSocket(req, socket, head);
 });
 
 server.listen(wrapperPort, "127.0.0.1", () => {

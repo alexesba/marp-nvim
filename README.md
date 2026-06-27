@@ -22,42 +22,25 @@ Packer:
 ```lua
   use({
     "alexesba/marp-nvim",
-    ft = "markdown",
+    cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
+    config = true,
     run = function()
       require("marp").install()
     end,
   }),
 ```
 
-Lazy (recommended — loads on Markdown buffers, installs Marp CLI on plugin install/update):
+Lazy (recommended — load on `:MarpStart` and related commands, or on Markdown buffers with `ft`):
+
 ```lua
   {
     "alexesba/marp-nvim",
-    ft = "markdown",
     cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
+    ft = "markdown", -- optional: also load when opening a Markdown buffer
     build = function(plugin)
       require("marp").install(plugin.dir)
     end,
     config = true,
-  },
-```
-
-With a specific configuration:
-```lua
-  {
-    "alexesba/marp-nvim",
-    ft = "markdown",
-    cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
-    build = function(plugin)
-      require("marp").install(plugin.dir)
-    end,
-    config = function()
-      require("marp").setup({
-        port = 8080,
-        wait_for_response_timeout = 30,
-        wait_for_response_delay = 1,
-      })
-    end,
   },
 ```
 
@@ -66,7 +49,6 @@ With lazy.nvim `opts` (no separate `config` function needed):
 ```lua
   {
     "alexesba/marp-nvim",
-    ft = "markdown",
     cmd = { "MarpStart", "MarpOpen", "MarpStop", "MarpToggle", "MarpStatus" },
     opts = {
       preview_browser = "dedicated",
@@ -76,8 +58,6 @@ With lazy.nvim `opts` (no separate `config` function needed):
     end,
   },
 ```
-
-The plugin also registers a `FileType` autocmd for `markdown`, so it loads when you open a Markdown file even without lazy-loading configuration. With lazy.nvim, `ft = "markdown"` is still recommended so the plugin is not loaded at startup.
 
 If Marp CLI is not found on your `PATH` and is not yet installed in the plugin, `:MarpInstall` is registered automatically so you can install it manually.
 

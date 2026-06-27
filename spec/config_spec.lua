@@ -14,25 +14,26 @@ describe("marp.config", function()
     assert.is_true(config.options.auto_install)
     assert.is_true(config.options.use_npx_fallback)
     assert.equals("latest", config.options.marp_version)
-    assert.is_false(config.options.close_browser_on_stop)
-    assert.is_nil(config.options.wrapper_port)
-    assert.is_nil(config.options.server_dir)
+    assert.equals("system", config.options.preview_browser)
+    assert.is_nil(config.options.wsl_browser)
+    assert.is_nil(config.options.wsl_preview_profile)
+    assert.is_nil(config.options.preview_host)
     assert.is_true(config.options.use_buffer_dir)
   end)
 
   it("merges user options without mutating defaults", function()
     config.setup({
       port = 9000,
-      close_browser_on_stop = true,
+      preview_browser = "dedicated",
     })
 
     assert.equals(9000, config.options.port)
-    assert.is_true(config.options.close_browser_on_stop)
+    assert.equals("dedicated", config.options.preview_browser)
     assert.equals(30, config.options.wait_for_response_timeout)
 
     config.setup()
     assert.equals(8080, config.options.port)
-    assert.is_false(config.options.close_browser_on_stop)
+    assert.equals("system", config.options.preview_browser)
   end)
 
   it("replaces the full options table on each setup", function()
@@ -42,5 +43,11 @@ describe("marp.config", function()
     config.setup({ server_dir = "/tmp/slides" })
     assert.equals("/tmp/slides", config.options.server_dir)
     assert.is_true(config.options.use_buffer_dir)
+  end)
+
+  it("falls back to system for invalid preview_browser values", function()
+    config.setup({ preview_browser = "chrome" })
+
+    assert.equals("system", config.options.preview_browser)
   end)
 end)

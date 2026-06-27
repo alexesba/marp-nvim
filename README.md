@@ -7,11 +7,11 @@ A [neovim](https://neovim.io/) plugin for [Marp](https://marp.app/).
 - see if Marp server is running
 - browser window opens when Marp is running and ready
 - automatically installs Marp CLI into the plugin when needed
-- optionally close the browser preview tab when stopping the server (`close_browser_on_stop`)
+- opens the preview in your system browser, or optionally in a dedicated WSL Edge window (`preview_browser`)
 
 ## ⚡️ Requirements
 
-- [Node.js](https://nodejs.org/) v18+ and `npm` (for automatic Marp CLI installation and the preview wrapper)
+- [Node.js](https://nodejs.org/) v18+ and `npm` (for automatic Marp CLI installation)
 - Alternatively, install [Marp CLI](https://marp.app/) globally and the plugin will use it from your `PATH`
 
 ## 📦 Installation
@@ -69,7 +69,7 @@ With lazy.nvim `opts` (no separate `config` function needed):
     ft = "markdown",
     cmd = { "MarpStart", "MarpStop", "MarpToggle", "MarpStatus" },
     opts = {
-      close_browser_on_stop = true,
+      preview_browser = "dedicated",
     },
     build = function(plugin)
       require("marp").install(plugin.dir)
@@ -94,8 +94,9 @@ The following defaults are provided:
   auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
-  close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
-  wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  preview_browser = "system", -- "system" | "dedicated" (dedicated closes on :MarpStop on WSL)
+  wsl_browser = nil, -- path to msedge.exe on Windows; nil auto-detects under /mnt/c
+  wsl_preview_profile = nil, -- Windows --user-data-dir; nil uses %TEMP%/marp-nvim-preview
   preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
@@ -122,34 +123,54 @@ require("marp").setup({
 })
 ```
 
-### Close browser tab on stop
+### Preview browser
 
-Disabled by default. Set `close_browser_on_stop = true` to open Marp through a small wrapper page so `:MarpStop` can signal the browser to close the tab.
+Two modes:
+
+| `preview_browser` | `:MarpStart` | `:MarpStop` |
+|---|---|---|
+| `"system"` (default) | Opens in your OS default browser | Stops Marp only; the tab stays open |
+| `"dedicated"` | WSL: opens Microsoft Edge in a temp profile | Stops Marp and closes that Edge window |
+
+**System** (default) matches Marp CLI: simple tab open, no cleanup on stop.
+
+**Dedicated** is for WSL users who want the preview window to disappear on `:MarpStop` without a wrapper or `window.close()` hacks.
 
 ```lua
 require("marp").setup({
-  close_browser_on_stop = true,
+  preview_browser = "dedicated",
 })
 ```
 
-How it works:
+On **macOS and Linux**, `preview_browser = "dedicated"` falls back to the system browser (close on stop is not supported there yet).
 
-1. Marp still runs on `port` (default `8080`)
-2. A small Node wrapper serves `http://127.0.0.1:<port+1>/` with an iframe to Marp
-3. The wrapper page uses Server-Sent Events (SSE) to receive a `close` event
-4. `:MarpStop` POSTs to `/close`, which tells the page to call `window.close()`
+How dedicated mode works on WSL:
 
-**Note:** `window.close()` is not guaranteed in every browser. If the tab stays open, it will show a connection error after the server stops.
+1. Marp runs on `port` (default `8080`)
+2. Edge opens with `--user-data-dir=%TEMP%\marp-nvim-preview` so it does not touch your normal browser session
+3. The preview URL uses the WSL VM IP (see below) so Windows can reach the server
+4. `:MarpStop` kills only Edge processes using that profile (presenter popups included)
+
+The dedicated profile is sanitized after each stop so Edge does not show a "Restore pages" prompt on the next preview.
+
+Optional overrides:
+
+```lua
+require("marp").setup({
+  preview_browser = "dedicated",
+  wsl_browser = "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  wsl_preview_profile = "C:\\Users\\you\\AppData\\Local\\Temp\\marp-nvim-preview",
+})
+```
 
 ### WSL (Windows)
 
-Neovim in WSL opens the preview in your **Windows** browser (via `wslview`). The preview wrapper listens on `127.0.0.1` by default, which Windows cannot reach.
+Neovim in WSL opens the preview in your **Windows** browser. `127.0.0.1` in WSL is not reachable from Windows, so the plugin uses the WSL VM IP for preview URLs.
 
 On WSL the plugin automatically:
 
-1. Binds the preview wrapper to `0.0.0.0`
-2. Opens the browser using the WSL VM IP (from `hostname -I`)
-3. Points the wrapper iframe at the same host so Marp loads correctly
+1. Opens the browser using the WSL VM IP (from `hostname -I`)
+2. With `preview_browser = "dedicated"`, launches a dedicated Edge window instead of `wslview`
 
 If auto-detection fails, set the host manually:
 

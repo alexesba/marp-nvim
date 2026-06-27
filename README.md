@@ -95,10 +95,10 @@ The following defaults are provided:
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
   preview_browser = "system", -- "system" | "dedicated" (isolated browser; closes on :MarpStop)
-  dedicated_browser = nil, -- chromium-based browser path; nil auto-detects via PATH (like `which`)
-  dedicated_preview_profile = nil, -- --user-data-dir on macOS/Linux; nil uses $TMPDIR/marp-nvim-preview
-  wsl_browser = nil, -- path to msedge.exe on Windows; nil auto-detects under /mnt/c
-  wsl_preview_profile = nil, -- Windows --user-data-dir; nil uses %TEMP%/marp-nvim-preview
+  dedicated_browser = nil, -- optional; nil auto-detects Chrome/Chromium/Edge via PATH (exepath)
+  dedicated_preview_profile = nil, -- optional; nil uses $TMPDIR/marp-nvim-preview
+  wsl_browser = nil, -- optional; nil auto-detects msedge.exe under /mnt/c on WSL
+  wsl_preview_profile = nil, -- optional; nil uses %TEMP%/marp-nvim-preview on WSL
   preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
@@ -136,13 +136,15 @@ Two modes:
 
 **System** (default) matches Marp CLI: simple tab open, no cleanup on stop.
 
-**Dedicated** launches an isolated Chromium-based browser (Edge on WSL, Chrome/Chromium/Edge on macOS and Linux) so `:MarpStop` can close the preview window without a wrapper or `window.close()` hacks.
+**Dedicated** launches an isolated Chromium-based browser so `:MarpStop` can close the preview window without a wrapper or `window.close()` hacks. You usually only need:
 
 ```lua
 require("marp").setup({
   preview_browser = "dedicated",
 })
 ```
+
+No browser path configuration is required — the plugin auto-detects a suitable browser (see below).
 
 How dedicated mode works:
 
@@ -151,21 +153,48 @@ How dedicated mode works:
 3. `:MarpStop` kills only processes using that profile (presenter popups included)
 4. The profile is sanitized after each stop so the browser does not show a "Restore pages" prompt on the next preview
 
-When `dedicated_browser` is not set, the plugin resolves a Chromium-based browser from your `PATH` (via Neovim's `exepath`, equivalent to `which`) in this order: `google-chrome-stable`, `google-chrome`, `chromium-browser`, `chromium`, `microsoft-edge-stable`, `microsoft-edge`. On macOS it also checks `/Applications/` for Chrome, Chromium, and Edge.
+Dedicated mode requires a **Chromium-based** browser (Chrome, Chromium, or Edge). Safari and Firefox are not supported.
 
-On **WSL**, the preview URL uses the WSL VM IP so Windows can reach the server (see below).
+#### Browser auto-detection
 
-Optional overrides (only if auto-detection fails or you want a specific browser):
+When `dedicated_browser` is **not** set, the plugin finds a browser automatically.
+
+**macOS and Linux** — resolved from your `PATH` via Neovim's `exepath` (equivalent to `which`), in this order:
+
+1. `google-chrome-stable`
+2. `google-chrome`
+3. `chromium-browser`
+4. `chromium`
+5. `microsoft-edge-stable`
+6. `microsoft-edge`
+
+On **macOS**, these application paths are also checked:
+
+- `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+- `/Applications/Chromium.app/Contents/MacOS/Chromium`
+- `/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge`
+
+**WSL** — Microsoft Edge under `/mnt/c/Program Files/...` (no `wsl_browser` needed in most setups).
+
+If auto-detection fails, the plugin logs a warning and falls back to your system default browser.
+
+#### Optional overrides
+
+Set these only when auto-detection fails or you want a specific browser or profile path:
 
 ```lua
 require("marp").setup({
   preview_browser = "dedicated",
-  dedicated_browser = "/usr/bin/google-chrome-stable", -- macOS/Linux
+  -- macOS / Linux:
+  dedicated_browser = "/usr/bin/google-chrome-stable",
   dedicated_preview_profile = "/tmp/marp-nvim-preview",
+  -- WSL:
   wsl_browser = "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   wsl_preview_profile = "C:\\Users\\you\\AppData\\Local\\Temp\\marp-nvim-preview",
 })
 ```
+
+On **WSL**, the preview URL uses the WSL VM IP so Windows can reach the server (see below).
 
 ### WSL (Windows)
 
@@ -174,7 +203,7 @@ Neovim in WSL opens the preview in your **Windows** browser. `127.0.0.1` in WSL 
 On WSL the plugin automatically:
 
 1. Opens the browser using the WSL VM IP (from `hostname -I`)
-2. With `preview_browser = "dedicated"`, launches a dedicated Edge window instead of `wslview`
+2. With `preview_browser = "dedicated"`, launches a dedicated Edge window (auto-detected; no `wsl_browser` needed in most setups)
 
 If auto-detection fails, set the host manually:
 

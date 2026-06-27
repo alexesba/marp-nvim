@@ -5,9 +5,11 @@ const http = require("http");
 
 const marpPort = Number(process.argv[2]);
 const wrapperPort = Number(process.argv[3]);
+const marpHost = process.argv[4] || "127.0.0.1";
+const bindHost = process.argv[5] || "127.0.0.1";
 
 if (!marpPort || !wrapperPort) {
-  console.error("usage: node server.js <marp-port> <wrapper-port>");
+  console.error("usage: node server.js <marp-port> <wrapper-port> [marp-host] [bind-host]");
   process.exit(1);
 }
 
@@ -15,7 +17,7 @@ if (!marpPort || !wrapperPort) {
 let clients = [];
 
 function previewHtml() {
-  const marpUrl = `http://127.0.0.1:${marpPort}/`;
+  const marpUrl = `http://${marpHost}:${marpPort}/`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,7 +94,7 @@ const server = http.createServer((req, res) => {
   res.end("not found");
 });
 
-server.listen(wrapperPort, "127.0.0.1", () => {
+server.listen(wrapperPort, bindHost, () => {
   process.stdout.write(`ready:${wrapperPort}\n`);
 });
 

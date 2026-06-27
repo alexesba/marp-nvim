@@ -148,4 +148,23 @@ describe("marp.util", function()
       assert.is_false(util.can_start_server())
     end)
   end)
+
+  describe("preview_host", function()
+    it("uses preview_host from config when set", function()
+      config.setup({ preview_host = "192.168.1.10" })
+
+      assert.equals("192.168.1.10", util.preview_host())
+    end)
+
+    it("builds preview URLs with the configured host", function()
+      config.setup({ preview_host = "192.168.1.10" })
+
+      assert.equals("http://192.168.1.10:8081/", util.preview_url(8081))
+    end)
+
+    it("builds local health-check URLs on 127.0.0.1", function()
+      assert.equals("http://127.0.0.1:8080/", util.local_url(8080))
+      assert.equals("http://127.0.0.1:8081/close", util.local_url(8081, "/close"))
+    end)
+  end)
 end)

@@ -1,5 +1,65 @@
 local M = {}
 
+--- Whether Neovim is running inside WSL (Windows browser is opened via wslview).
+function M.is_wsl()
+  if vim.fn.has("wsl") == 1 then
+    return true
+  end
+
+  local version_file = io.open("/proc/version", "r")
+  if not version_file then
+    return false
+  end
+
+  local version = version_file:read("*a") or ""
+  version_file:close()
+  return version:lower():match("microsoft") ~= nil
+end
+
+--- First IPv4 address of the WSL instance (reachable from the Windows host).
+function M.wsl_ip()
+  local result = vim.system({ "hostname", "-I" }, { text = true }):wait()
+  if result.code ~= 0 or not result.stdout then
+    return nil
+  end
+
+  return result.stdout:match("%S+")
+end
+
+--- Hostname used in preview URLs opened in the browser.
+function M.preview_host()
+  local opts = require("marp.config").options
+  if opts.preview_host and opts.preview_host ~= "" then
+    return opts.preview_host
+  end
+
+  if M.is_wsl() then
+    return M.wsl_ip() or "127.0.0.1"
+  end
+
+  return "127.0.0.1"
+end
+
+--- Host the preview wrapper listens on (0.0.0.0 on WSL so Windows can connect).
+function M.wrapper_bind_host()
+  if M.is_wsl() then
+    return "0.0.0.0"
+  end
+
+  return "127.0.0.1"
+end
+
+--- Build a browser-facing preview URL for the given port.
+function M.preview_url(port)
+  return "http://" .. M.preview_host() .. ":" .. port .. "/"
+end
+
+--- Local URL for health checks from inside Neovim's environment.
+function M.local_url(port, path)
+  path = path or "/"
+  return "http://127.0.0.1:" .. port .. path
+end
+
 --[[
     Opens a URL in a browser.
     @param url (string) The URL to open.

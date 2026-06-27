@@ -10,9 +10,7 @@ local defaults = {
   marp_version = "latest", -- npx package version when falling back to npx
   preview_browser = "system", -- "system" | "dedicated" (isolated browser; closes on :MarpStop)
   dedicated_browser = nil, -- optional; nil auto-detects Chrome/Chromium/Edge via PATH (exepath)
-  dedicated_preview_profile = nil, -- optional; nil uses $TMPDIR/marp-nvim-preview
-  wsl_browser = nil, -- optional; nil auto-detects msedge.exe under /mnt/c on WSL
-  wsl_preview_profile = nil, -- optional; nil uses %TEMP%/marp-nvim-preview on WSL
+  dedicated_preview_profile = nil, -- optional; nil uses a temp marp-nvim-preview profile
   preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
@@ -30,9 +28,34 @@ local function normalize_preview_browser(opts)
   end
 end
 
+local function normalize_deprecated_options(opts)
+  if opts.wsl_browser and opts.wsl_browser ~= "" then
+    if not opts.dedicated_browser or opts.dedicated_browser == "" then
+      opts.dedicated_browser = opts.wsl_browser
+    end
+    vim.notify(
+      "marp-nvim: wsl_browser is deprecated; use dedicated_browser",
+      vim.log.levels.WARN
+    )
+    opts.wsl_browser = nil
+  end
+
+  if opts.wsl_preview_profile and opts.wsl_preview_profile ~= "" then
+    if not opts.dedicated_preview_profile or opts.dedicated_preview_profile == "" then
+      opts.dedicated_preview_profile = opts.wsl_preview_profile
+    end
+    vim.notify(
+      "marp-nvim: wsl_preview_profile is deprecated; use dedicated_preview_profile",
+      vim.log.levels.WARN
+    )
+    opts.wsl_preview_profile = nil
+  end
+end
+
 function M.setup(options)
   local opts = vim.tbl_deep_extend("force", {}, defaults, options or {})
   normalize_preview_browser(opts)
+  normalize_deprecated_options(opts)
   M.options = opts
 end
 

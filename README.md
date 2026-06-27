@@ -96,9 +96,7 @@ The following defaults are provided:
   marp_version = "latest", -- npx package version when falling back to npx
   preview_browser = "system", -- "system" | "dedicated" (isolated browser; closes on :MarpStop)
   dedicated_browser = nil, -- optional; nil auto-detects Chrome/Chromium/Edge via PATH (exepath)
-  dedicated_preview_profile = nil, -- optional; nil uses $TMPDIR/marp-nvim-preview
-  wsl_browser = nil, -- optional; nil auto-detects msedge.exe under /mnt/c on WSL
-  wsl_preview_profile = nil, -- optional; nil uses %TEMP%/marp-nvim-preview on WSL
+  dedicated_preview_profile = nil, -- optional; nil uses a temp marp-nvim-preview profile
   preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
@@ -136,7 +134,13 @@ Two modes:
 
 **System** (default) matches Marp CLI: simple tab open, no cleanup on stop.
 
-**Dedicated** launches an isolated Chromium-based browser so `:MarpStop` can close the preview window without a wrapper or `window.close()` hacks. You usually only need:
+**Dedicated** launches an isolated Chromium-based browser on **WSL, macOS, and Linux** with the same behavior:
+
+- App mode (`--app=...`) — no address bar, single window
+- Temporary profile — no bookmarks bar, no bookmark import
+- `:MarpStop` closes the preview window and sanitizes the profile
+
+You usually only need:
 
 ```lua
 require("marp").setup({
@@ -157,9 +161,9 @@ Dedicated mode requires a **Chromium-based** browser (Chrome, Chromium, or Edge)
 
 #### Browser auto-detection
 
-When `dedicated_browser` is **not** set, the plugin finds a browser automatically.
+When `dedicated_browser` is **not** set, the plugin finds a browser automatically on every platform.
 
-**macOS and Linux** — resolved from your `PATH` via Neovim's `exepath` (equivalent to `which`), in this order:
+Lookup order:
 
 1. `google-chrome-stable`
 2. `google-chrome`
@@ -168,13 +172,22 @@ When `dedicated_browser` is **not** set, the plugin finds a browser automaticall
 5. `microsoft-edge-stable`
 6. `microsoft-edge`
 
+Each name is resolved from your `PATH` via Neovim's `exepath` (equivalent to `which`).
+
 On **macOS**, these application paths are also checked:
 
 - `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - `/Applications/Chromium.app/Contents/MacOS/Chromium`
 - `/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge`
 
-**WSL** — Microsoft Edge under `/mnt/c/Program Files/...` (no `wsl_browser` needed in most setups).
+On **WSL**, Microsoft Edge under `/mnt/c/Program Files/...` is checked if nothing is found on `PATH`.
+
+Default profile directory:
+
+| Platform | Default `--user-data-dir` |
+|---|---|
+| WSL | `%TEMP%\marp-nvim-preview` (Windows temp) |
+| macOS / Linux | `$TMPDIR/marp-nvim-preview` |
 
 If auto-detection fails, the plugin logs a warning and falls back to your system default browser.
 
@@ -185,12 +198,8 @@ Set these only when auto-detection fails or you want a specific browser or profi
 ```lua
 require("marp").setup({
   preview_browser = "dedicated",
-  -- macOS / Linux:
   dedicated_browser = "/usr/bin/google-chrome-stable",
-  dedicated_preview_profile = "/tmp/marp-nvim-preview",
-  -- WSL:
-  wsl_browser = "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  wsl_preview_profile = "C:\\Users\\you\\AppData\\Local\\Temp\\marp-nvim-preview",
+  dedicated_preview_profile = "/tmp/marp-nvim-preview", -- on WSL use a Windows path, e.g. C:\\Temp\\marp-nvim-preview
 })
 ```
 
@@ -203,7 +212,7 @@ Neovim in WSL opens the preview in your **Windows** browser. `127.0.0.1` in WSL 
 On WSL the plugin automatically:
 
 1. Opens the browser using the WSL VM IP (from `hostname -I`)
-2. With `preview_browser = "dedicated"`, launches a dedicated Edge window (auto-detected; no `wsl_browser` needed in most setups)
+2. With `preview_browser = "dedicated"`, launches a dedicated Chromium-based browser window (same behavior as macOS/Linux)
 
 If auto-detection fails, set the host manually:
 

@@ -33,18 +33,24 @@ describe("marp.browser", function()
     end)
   end)
 
-  describe("profile_dir_unix", function()
+  describe("profile_launch_path", function()
     it("uses dedicated_preview_profile when set", function()
       config.setup({ dedicated_preview_profile = "/tmp/custom-preview" })
-      assert.equals("/tmp/custom-preview", browser.profile_dir_unix())
+      assert.equals("/tmp/custom-preview", browser.profile_launch_path())
     end)
 
-    it("defaults to TMPDIR/marp-nvim-preview", function()
+    it("defaults to TMPDIR/marp-nvim-preview on unix", function()
+      local original_platform = browser.platform
       local original = vim.env.TMPDIR
+
+      browser.platform = function()
+        return "unix"
+      end
       vim.env.TMPDIR = "/var/tmp"
 
-      assert.equals("/var/tmp/marp-nvim-preview", browser.profile_dir_unix())
+      assert.equals("/var/tmp/marp-nvim-preview", browser.profile_launch_path())
 
+      browser.platform = original_platform
       vim.env.TMPDIR = original
     end)
   end)
@@ -60,6 +66,11 @@ describe("marp.browser", function()
       local original_platform = browser.platform
       browser.platform = function()
         return "unix"
+      end
+      assert.is_true(browser.closes_on_stop())
+
+      browser.platform = function()
+        return "wsl"
       end
       assert.is_true(browser.closes_on_stop())
 

@@ -5,12 +5,12 @@ local M = {}
 
 local PROFILE_DIR_NAME = "marp-nvim-preview"
 
-local EDGE_PATHS = {
+local WSL_EDGE_PATHS = {
   "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe",
 }
 
-local UNIX_BROWSER_NAMES = {
+local PATH_BROWSER_NAMES = {
   "google-chrome-stable",
   "google-chrome",
   "chromium-browser",
@@ -79,12 +79,7 @@ function M.windows_temp_dir()
   return temp
 end
 
-function M.profile_dir_win()
-  local opts = config.options
-  if opts.wsl_preview_profile and opts.wsl_preview_profile ~= "" then
-    return opts.wsl_preview_profile
-  end
-
+function M.default_profile_dir_win()
   local temp = M.windows_temp_dir()
   if not temp then
     return nil
@@ -94,18 +89,42 @@ function M.profile_dir_win()
   return temp .. sep .. PROFILE_DIR_NAME
 end
 
-function M.profile_dir_unix()
-  local opts = config.options
-  if opts.dedicated_preview_profile and opts.dedicated_preview_profile ~= "" then
-    return opts.dedicated_preview_profile
-  end
-
+function M.default_profile_dir_unix()
   local tmp = vim.env.TMPDIR or vim.env.TEMP or "/tmp"
   if tmp:sub(-1) == "/" then
     tmp = tmp:sub(1, -2)
   end
 
   return tmp .. "/" .. PROFILE_DIR_NAME
+end
+
+--- Profile path passed to the browser (--user-data-dir). Windows-style on WSL.
+function M.profile_launch_path()
+  local opts = config.options
+  if opts.dedicated_preview_profile and opts.dedicated_preview_profile ~= "" then
+    return opts.dedicated_preview_profile
+  end
+
+  if M.platform() == "wsl" then
+    return M.default_profile_dir_win()
+  end
+
+  return M.default_profile_dir_unix()
+end
+
+--- Profile path for reading/writing preference files from Neovim.
+function M.profile_fs_path()
+  local launch_path = M.profile_launch_path()
+  if M.platform() == "wsl" then
+    return M.win_to_wsl(launch_path) or launch_path
+  end
+
+  return launch_path
+end
+
+--- Backward-compatible alias.
+function M.profile_dir_unix()
+  return M.default_profile_dir_unix()
 end
 
 --- Chromium flags for a dedicated preview profile (app mode: no URL bar, single window).
@@ -192,7 +211,7 @@ local function prepare_preferences_file(path)
   file:close()
 end
 
-local function sanitize_profile_file(path)
+local function sanitize_local_state(path)
   local file = io.open(path, "r")
   if not file then
     return
@@ -208,7 +227,6 @@ local function sanitize_profile_file(path)
   if not file then
     return
   end
-
   file:write(content)
   file:close()
 end
@@ -216,7 +234,7 @@ end
 function M.prepare_chromium_profile(profile_dir, separator)
   separator = separator or "/"
   prepare_preferences_file(profile_dir .. separator .. "Default" .. separator .. "Preferences")
-  sanitize_profile_file(profile_dir .. separator .. "Local State")
+  sanitize_local_state(profile_dir .. separator .. "Local State")
 end
 
 --- Backward-compatible alias.
@@ -224,47 +242,11 @@ function M.sanitize_chromium_profile(profile_dir, separator)
   M.prepare_chromium_profile(profile_dir, separator)
 end
 
-function M.prepare_wsl_profile(profile_win)
-  local profile_wsl = M.win_to_wsl(profile_win)
-  if profile_wsl then
-    M.prepare_chromium_profile(profile_wsl, "/")
-    return
+function M.prepare_dedicated_profile()
+  local fs_path = M.profile_fs_path()
+  if fs_path then
+    M.prepare_chromium_profile(fs_path, "/")
   end
-
-  M.sanitize_wsl_profile(profile_win)
-end
-
-function M.sanitize_wsl_profile(profile_win)
-  local escaped = profile_win:gsub("'", "''")
-  local ps = string.format(
-    [[$paths = @('%s\Default\Preferences', '%s\Local State'); foreach ($path in $paths) { if (-not (Test-Path -LiteralPath $path)) { continue }; $content = Get-Content -LiteralPath $path -Raw; $content = $content -replace '"exited_cleanly"\s*:\s*false', '"exited_cleanly":true'; $content = $content -replace '"exit_type"\s*:\s*"[^"]*"', '"exit_type":"Normal"'; $content = $content -replace '"show_on_all_tabs"\s*:\s*true', '"show_on_all_tabs":false'; $content = $content -replace '"show_bookmark_bar"\s*:\s*true', '"show_bookmark_bar":false'; $content = $content -replace '"import_bookmarks"\s*:\s*true', '"import_bookmarks":false'; [System.IO.File]::WriteAllText($path, $content) }]],
-    escaped,
-    escaped
-  )
-
-  vim.system({
-    "powershell.exe",
-    "-NoProfile",
-    "-Command",
-    ps,
-  }, { text = true }):wait()
-end
-
-function M.find_edge_executable()
-  local opts = config.options
-  if opts.wsl_browser and opts.wsl_browser ~= "" then
-    if vim.fn.filereadable(opts.wsl_browser) == 1 then
-      return opts.wsl_browser
-    end
-  end
-
-  for _, path in ipairs(EDGE_PATHS) do
-    if vim.fn.filereadable(path) == 1 then
-      return path
-    end
-  end
-
-  return nil
 end
 
 local function resolve_on_path(name)
@@ -275,15 +257,19 @@ local function resolve_on_path(name)
   return nil
 end
 
-function M.find_chromium_executable()
+local function readable(path)
+  return vim.fn.executable(path) == 1 or vim.fn.filereadable(path) == 1
+end
+
+function M.find_dedicated_executable()
   local opts = config.options
   if opts.dedicated_browser and opts.dedicated_browser ~= "" then
-    if vim.fn.executable(opts.dedicated_browser) == 1 or vim.fn.filereadable(opts.dedicated_browser) == 1 then
+    if readable(opts.dedicated_browser) then
       return opts.dedicated_browser
     end
   end
 
-  for _, name in ipairs(UNIX_BROWSER_NAMES) do
+  for _, name in ipairs(PATH_BROWSER_NAMES) do
     local path = resolve_on_path(name)
     if path then
       return path
@@ -296,8 +282,20 @@ function M.find_chromium_executable()
     end
   end
 
+  if M.platform() == "wsl" then
+    for _, path in ipairs(WSL_EDGE_PATHS) do
+      if vim.fn.filereadable(path) == 1 then
+        return path
+      end
+    end
+  end
+
   return nil
 end
+
+--- Backward-compatible aliases.
+M.find_chromium_executable = M.find_dedicated_executable
+M.find_edge_executable = M.find_dedicated_executable
 
 function M.uses_dedicated_preview()
   return config.options.preview_browser == "dedicated"
@@ -313,12 +311,46 @@ function M.closes_on_stop()
   return M.uses_dedicated_preview() and M.dedicated_supported()
 end
 
-local function launch_dedicated(browser, profile, url, prepare_fn)
+function M.kill_dedicated_processes()
+  local platform = M.platform()
+  if platform == "wsl" then
+    local ps = string.format(
+      [[Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*%s*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }]],
+      PROFILE_DIR_NAME
+    )
+    vim.system({
+      "powershell.exe",
+      "-NoProfile",
+      "-Command",
+      ps,
+    }, { text = true }):wait()
+    return
+  end
+
+  if platform == "mac" or platform == "unix" then
+    vim.system({ "pkill", "-f", PROFILE_DIR_NAME }, { text = true }):wait()
+  end
+end
+
+function M.open_dedicated(url)
+  if not M.dedicated_supported() then
+    return false, "dedicated preview is not supported on this platform"
+  end
+
+  local browser = M.find_dedicated_executable()
+  if not browser then
+    return false, "Chromium-based browser not found (try dedicated_browser)"
+  end
+
+  local profile = M.profile_launch_path()
+  if not profile then
+    return false, "could not resolve dedicated preview profile directory"
+  end
+
   M.close_dedicated()
-  prepare_fn(profile)
+  M.prepare_dedicated_profile()
 
   local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile, url))
-
   local jobid = vim.fn.jobstart(argv, { detach = true })
   if jobid <= 0 then
     return false, "failed to launch dedicated browser"
@@ -328,82 +360,10 @@ local function launch_dedicated(browser, profile, url, prepare_fn)
   return true
 end
 
-function M.open_wsl_dedicated(url)
-  local edge = M.find_edge_executable()
-  if not edge then
-    return false, "Microsoft Edge not found on Windows"
-  end
-
-  local profile = M.profile_dir_win()
-  if not profile then
-    return false, "could not resolve Windows TEMP directory"
-  end
-
-  return launch_dedicated(edge, profile, url, M.prepare_wsl_profile)
-end
-
-function M.close_wsl_dedicated()
-  M._dedicated_open = false
-
-  local ps = string.format(
-    [[Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*%s*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }]],
-    PROFILE_DIR_NAME
-  )
-
-  vim.system({
-    "powershell.exe",
-    "-NoProfile",
-    "-Command",
-    ps,
-  }, { text = true }):wait()
-
-  local profile = M.profile_dir_win()
-  if profile then
-    M.prepare_wsl_profile(profile)
-  end
-end
-
-function M.open_unix_dedicated(url)
-  local browser = M.find_chromium_executable()
-  if not browser then
-    return false, "Chromium-based browser not found (try dedicated_browser)"
-  end
-
-  local profile = M.profile_dir_unix()
-  return launch_dedicated(browser, profile, url, function(dir)
-    M.prepare_chromium_profile(dir, "/")
-  end)
-end
-
-function M.close_unix_dedicated()
-  M._dedicated_open = false
-
-  vim.system({ "pkill", "-f", PROFILE_DIR_NAME }, { text = true }):wait()
-
-  local profile = M.profile_dir_unix()
-  if profile then
-    M.prepare_chromium_profile(profile, "/")
-  end
-end
-
-function M.open_dedicated(url)
-  local platform = M.platform()
-  if platform == "wsl" then
-    return M.open_wsl_dedicated(url)
-  end
-  if platform == "mac" or platform == "unix" then
-    return M.open_unix_dedicated(url)
-  end
-  return false, "dedicated preview is not supported on this platform"
-end
-
 function M.close_dedicated()
-  local platform = M.platform()
-  if platform == "wsl" then
-    M.close_wsl_dedicated()
-  elseif platform == "mac" or platform == "unix" then
-    M.close_unix_dedicated()
-  end
+  M._dedicated_open = false
+  M.kill_dedicated_processes()
+  M.prepare_dedicated_profile()
 end
 
 --- Open the Marp preview in a browser appropriate for the current platform.

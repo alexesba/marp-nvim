@@ -228,10 +228,16 @@ function M.dir_contains_md_files(current_dir)
   return false
 end
 
+local hl_to_level = {
+  InfoMsg = vim.log.levels.INFO,
+  WarningMsg = vim.log.levels.WARN,
+  ErrorMsg = vim.log.levels.ERROR,
+}
+
 --[[
-    Logs a message to the Vim command line.
+    Logs a message via vim.notify when available, otherwise the command line.
     @param msg (string) The message to log.
-    @param hl (string) The highlight group to use for the message.
+    @param hl (string) The highlight group to use for command-line fallback.
     @usage
     ```lua
     local util = require("marp/util")
@@ -239,11 +245,16 @@ end
     ```
 ]]
 function M.log(msg, hl)
+  if vim.notify then
+    vim.notify(msg, hl_to_level[hl] or vim.log.levels.INFO, { title = "Marp" })
+    return
+  end
+
   vim.api.nvim_echo({ { "Marp: ", hl }, { msg } }, true, {})
 end
 
 --[[
-    Logs an informational message to the Vim command line.
+    Logs an informational message.
     @param msg (string) The message to log.
     @usage
     ```lua
@@ -256,7 +267,7 @@ function M.log_info(msg)
 end
 
 --[[
-    Logs a warning message to the Vim command line.
+    Logs a warning message.
     @param msg (string) The message to log.
     @usage
     ```lua
@@ -269,7 +280,7 @@ function M.log_warn(msg)
 end
 
 --[[
-    Logs an error message to the Vim command line.
+    Logs an error message.
     @param msg (string) The message to log.
     @usage
     ```lua

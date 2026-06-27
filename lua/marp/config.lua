@@ -8,8 +8,9 @@ local defaults = {
   auto_install = true, -- install @marp-team/marp-cli into plugin deps when missing
   use_npx_fallback = true, -- use npx when marp is not on PATH and bundled install is unavailable
   marp_version = "latest", -- npx package version when falling back to npx
-  close_browser_on_stop = false, -- close preview tab on :MarpStop via preview wrapper
-  wrapper_port = nil, -- preview wrapper port; defaults to marp port + 1
+  preview_browser = "system", -- "system" | "dedicated" (dedicated closes on :MarpStop on WSL)
+  wsl_browser = nil, -- path to msedge.exe on Windows; nil auto-detects under /mnt/c
+  wsl_preview_profile = nil, -- Windows --user-data-dir; nil uses %TEMP%/marp-nvim-preview
   preview_host = nil, -- browser preview hostname; nil auto-detects (WSL uses the VM IP)
   server_dir = nil, -- directory passed to marp --server; nil uses resolve_server_dir()
   use_buffer_dir = true, -- serve the current Markdown buffer's directory instead of cwd
@@ -17,8 +18,31 @@ local defaults = {
 
 M.options = {}
 
+local function normalize_preview_browser(opts)
+  if opts.close_browser_on_stop ~= nil then
+    if opts.preview_browser == nil or opts.preview_browser == defaults.preview_browser then
+      opts.preview_browser = opts.close_browser_on_stop and "dedicated" or "system"
+    end
+    vim.notify(
+      "marp-nvim: close_browser_on_stop is deprecated; use preview_browser = \"dedicated\"",
+      vim.log.levels.WARN
+    )
+    opts.close_browser_on_stop = nil
+  end
+
+  if opts.preview_browser ~= "system" and opts.preview_browser ~= "dedicated" then
+    vim.notify(
+      'marp-nvim: invalid preview_browser "' .. tostring(opts.preview_browser) .. '"; using "system"',
+      vim.log.levels.WARN
+    )
+    opts.preview_browser = "system"
+  end
+end
+
 function M.setup(options)
-  M.options = vim.tbl_deep_extend("force", {}, defaults, options or {})
+  local opts = vim.tbl_deep_extend("force", {}, defaults, options or {})
+  normalize_preview_browser(opts)
+  M.options = opts
 end
 
 M.setup()

@@ -40,15 +40,6 @@ function M.preview_host()
   return "127.0.0.1"
 end
 
---- Host the preview wrapper listens on (0.0.0.0 on WSL so Windows can connect).
-function M.wrapper_bind_host()
-  if M.is_wsl() then
-    return "0.0.0.0"
-  end
-
-  return "127.0.0.1"
-end
-
 --- Build a browser-facing preview URL for the given port.
 function M.preview_url(port)
   return "http://" .. M.preview_host() .. ":" .. port .. "/"

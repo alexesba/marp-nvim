@@ -73,13 +73,15 @@ describe("marp.browser", function()
   end)
 
   describe("dedicated_launch_flags", function()
-    it("includes flags that suppress session restore UI", function()
-      local flags = browser.dedicated_launch_flags("/tmp/marp-nvim-preview")
+    it("opens in app mode without a separate URL argument", function()
+      local flags = browser.dedicated_launch_flags("/tmp/marp-nvim-preview", "http://127.0.0.1:8080/")
       local joined = table.concat(flags, " ")
 
       assert.matches("marp%-nvim%-preview", joined)
       assert.matches("hide%-crash%-restore%-bubble", joined)
       assert.matches("no%-first%-run", joined)
+      assert.matches("--app=http://127%.0%.0%.1:8080/", joined)
+      assert.is_not.matches("new%-window", joined)
     end)
   end)
 

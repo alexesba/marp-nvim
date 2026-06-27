@@ -108,14 +108,14 @@ function M.profile_dir_unix()
   return tmp .. "/" .. PROFILE_DIR_NAME
 end
 
---- Chromium flags for a dedicated preview profile.
-function M.dedicated_launch_flags(profile)
+--- Chromium flags for a dedicated preview profile (app mode: no URL bar, single window).
+function M.dedicated_launch_flags(profile, url)
   return {
     "--user-data-dir=" .. profile,
     "--no-first-run",
     "--no-default-browser-check",
     "--hide-crash-restore-bubble",
-    "--new-window",
+    "--app=" .. url,
   }
 end
 
@@ -232,8 +232,7 @@ local function launch_dedicated(browser, profile, url, sanitize_fn)
   M.close_dedicated()
   sanitize_fn(profile)
 
-  local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile))
-  table.insert(argv, url)
+  local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile, url))
 
   local jobid = vim.fn.jobstart(argv, { detach = true })
   if jobid <= 0 then

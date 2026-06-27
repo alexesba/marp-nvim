@@ -149,7 +149,7 @@ No browser path configuration is required — the plugin auto-detects a suitable
 How dedicated mode works:
 
 1. Marp runs on `port` (default `8080`)
-2. A Chromium-based browser opens with `--user-data-dir=.../marp-nvim-preview` so it does not touch your normal browser session
+2. A Chromium-based browser opens in **app mode** (`--app=...`) with `--user-data-dir=.../marp-nvim-preview` — no address bar, and a single window without an extra blank tab
 3. `:MarpStop` kills only processes using that profile (presenter popups included)
 4. The profile is sanitized after each stop so the browser does not show a "Restore pages" prompt on the next preview
 

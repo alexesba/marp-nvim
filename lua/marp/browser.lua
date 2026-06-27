@@ -10,11 +10,39 @@ local EDGE_PATHS = {
   "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe",
 }
 
+local UNIX_BROWSER_NAMES = {
+  "google-chrome-stable",
+  "google-chrome",
+  "chromium-browser",
+  "chromium",
+  "microsoft-edge-stable",
+  "microsoft-edge",
+}
+
+local MAC_BROWSER_PATHS = {
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+}
+
 M._dedicated_open = false
 
---- Marker string embedded in the Edge --user-data-dir path for process cleanup.
+--- Marker string embedded in the --user-data-dir path for process cleanup.
 function M.profile_marker()
   return PROFILE_DIR_NAME
+end
+
+function M.platform()
+  if util.is_wsl() then
+    return "wsl"
+  end
+  if vim.fn.has("mac") == 1 then
+    return "mac"
+  end
+  if vim.fn.has("unix") == 1 then
+    return "unix"
+  end
+  return "other"
 end
 
 --- Convert a Windows path (C:\foo) to a WSL /mnt/c/foo path.
@@ -66,8 +94,22 @@ function M.profile_dir_win()
   return temp .. sep .. PROFILE_DIR_NAME
 end
 
---- Chromium flags for a dedicated preview profile (Edge on WSL).
-function M.dedicated_edge_launch_flags(profile)
+function M.profile_dir_unix()
+  local opts = config.options
+  if opts.dedicated_preview_profile and opts.dedicated_preview_profile ~= "" then
+    return opts.dedicated_preview_profile
+  end
+
+  local tmp = vim.env.TMPDIR or vim.env.TEMP or "/tmp"
+  if tmp:sub(-1) == "/" then
+    tmp = tmp:sub(1, -2)
+  end
+
+  return tmp .. "/" .. PROFILE_DIR_NAME
+end
+
+--- Chromium flags for a dedicated preview profile.
+function M.dedicated_launch_flags(profile)
   return {
     "--user-data-dir=" .. profile,
     "--no-first-run",
@@ -77,7 +119,36 @@ function M.dedicated_edge_launch_flags(profile)
   }
 end
 
---- Clear crash-restore state after force-closing the dedicated profile.
+--- Backward-compatible alias.
+M.dedicated_edge_launch_flags = M.dedicated_launch_flags
+
+local function sanitize_profile_file(path)
+  local file = io.open(path, "r")
+  if not file then
+    return
+  end
+
+  local content = file:read("*a")
+  file:close()
+
+  content = content:gsub('"exited_cleanly"%s*:%s*false', '"exited_cleanly":true')
+  content = content:gsub('"exit_type"%s*:%s*"[^"]*"', '"exit_type":"Normal"')
+
+  file = io.open(path, "w")
+  if not file then
+    return
+  end
+
+  file:write(content)
+  file:close()
+end
+
+function M.sanitize_chromium_profile(profile_dir, separator)
+  separator = separator or "/"
+  sanitize_profile_file(profile_dir .. separator .. "Default" .. separator .. "Preferences")
+  sanitize_profile_file(profile_dir .. separator .. "Local State")
+end
+
 function M.sanitize_wsl_profile(profile_win)
   local escaped = profile_win:gsub("'", "''")
   local ps = string.format(
@@ -111,13 +182,57 @@ function M.find_edge_executable()
   return nil
 end
 
+function M.find_chromium_executable()
+  local opts = config.options
+  if opts.dedicated_browser and opts.dedicated_browser ~= "" then
+    if vim.fn.executable(opts.dedicated_browser) == 1 or vim.fn.filereadable(opts.dedicated_browser) == 1 then
+      return opts.dedicated_browser
+    end
+  end
+
+  for _, name in ipairs(UNIX_BROWSER_NAMES) do
+    if vim.fn.executable(name) == 1 then
+      return name
+    end
+  end
+
+  for _, path in ipairs(MAC_BROWSER_PATHS) do
+    if vim.fn.filereadable(path) == 1 then
+      return path
+    end
+  end
+
+  return nil
+end
+
 function M.uses_dedicated_preview()
   return config.options.preview_browser == "dedicated"
 end
 
+function M.dedicated_supported()
+  local platform = M.platform()
+  return platform == "wsl" or platform == "mac" or platform == "unix"
+end
+
 --- Whether :MarpStop will close a dedicated preview browser instance.
 function M.closes_on_stop()
-  return M.uses_dedicated_preview() and util.is_wsl()
+  return M.uses_dedicated_preview() and M.dedicated_supported()
+end
+
+local function launch_dedicated(browser, profile, url, sanitize_fn)
+  M.close_dedicated()
+  sanitize_fn(profile)
+
+  local argv = vim.list_extend({ browser }, M.dedicated_launch_flags(profile))
+  table.insert(argv, url)
+
+  local jobid = vim.fn.jobstart(argv, { detach = true })
+  if jobid <= 0 then
+    return false, "failed to launch dedicated browser"
+  end
+
+  M._dedicated_open = true
+  return true
 end
 
 function M.open_wsl_dedicated(url)
@@ -131,20 +246,7 @@ function M.open_wsl_dedicated(url)
     return false, "could not resolve Windows TEMP directory"
   end
 
-  M.close_wsl_dedicated()
-  M.sanitize_wsl_profile(profile)
-
-  local argv = vim.list_extend({ edge }, M.dedicated_edge_launch_flags(profile))
-  table.insert(argv, url)
-
-  local jobid = vim.fn.jobstart(argv, { detach = true })
-
-  if jobid <= 0 then
-    return false, "failed to launch Microsoft Edge"
-  end
-
-  M._dedicated_open = true
-  return true
+  return launch_dedicated(edge, profile, url, M.sanitize_wsl_profile)
 end
 
 function M.close_wsl_dedicated()
@@ -168,28 +270,67 @@ function M.close_wsl_dedicated()
   end
 end
 
+function M.open_unix_dedicated(url)
+  local browser = M.find_chromium_executable()
+  if not browser then
+    return false, "Chromium-based browser not found (try dedicated_browser)"
+  end
+
+  local profile = M.profile_dir_unix()
+  return launch_dedicated(browser, profile, url, function(dir)
+    M.sanitize_chromium_profile(dir, "/")
+  end)
+end
+
+function M.close_unix_dedicated()
+  M._dedicated_open = false
+
+  vim.system({ "pkill", "-f", PROFILE_DIR_NAME }, { text = true }):wait()
+
+  local profile = M.profile_dir_unix()
+  if profile then
+    M.sanitize_chromium_profile(profile, "/")
+  end
+end
+
+function M.open_dedicated(url)
+  local platform = M.platform()
+  if platform == "wsl" then
+    return M.open_wsl_dedicated(url)
+  end
+  if platform == "mac" or platform == "unix" then
+    return M.open_unix_dedicated(url)
+  end
+  return false, "dedicated preview is not supported on this platform"
+end
+
+function M.close_dedicated()
+  local platform = M.platform()
+  if platform == "wsl" then
+    M.close_wsl_dedicated()
+  elseif platform == "mac" or platform == "unix" then
+    M.close_unix_dedicated()
+  end
+end
+
 --- Open the Marp preview in a browser appropriate for the current platform.
 function M.open_preview(url)
   if M.uses_dedicated_preview() then
-    if util.is_wsl() then
-      local ok, err = M.open_wsl_dedicated(url)
-      if ok then
-        return true
-      end
-      util.log_warn((err or "could not open dedicated Edge") .. "; using system browser")
-    else
-      util.log_info('preview_browser = "dedicated" is only supported on WSL; using system browser')
+    local ok, err = M.open_dedicated(url)
+    if ok then
+      return true
     end
+    util.log_warn((err or "could not open dedicated browser") .. "; using system browser")
   end
 
   util.open_url_in_browser(url)
   return true
 end
 
---- Close a dedicated preview browser when supported (WSL + preview_browser = "dedicated").
+--- Close a dedicated preview browser when preview_browser = "dedicated".
 function M.close_preview()
   if M.closes_on_stop() then
-    M.close_wsl_dedicated()
+    M.close_dedicated()
   end
 end
 
